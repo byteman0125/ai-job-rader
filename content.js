@@ -188,8 +188,11 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         userLocation = changes.userLocation.newValue;
       }
       
-      // Update badge UI to show/hide cover letter section
-      updateBadgeForProfile();
+      // Update badge UI to show/hide cover letter section with debounce
+      clearTimeout(window.profileUpdateTimeout);
+      window.profileUpdateTimeout = setTimeout(() => {
+        updateBadgeForProfile();
+      }, 3000);
     }
   }
 });
@@ -572,25 +575,28 @@ async function extractJobInfo() {
 - Job explicitly states "remote", "work from anywhere", "distributed team"
 - No mention of office visits, commute, or physical presence
 - May have geographic restrictions (US only, Canada only, etc.) but still fully remote
+- **NO relocation requirements** - candidates can work from their current location
 - Examples: "remote within US", "work from anywhere in Canada", "fully distributed team"
 
 **"Hybrid"** = Requires some physical office presence:
 - Job mentions hybrid schedules, office visits, or commute requirements
 - Requires living near specific office locations
 - Mix of remote and in-office work
-- Examples: "hybrid schedule", "2 days in office", "must be near our office"
+- **May require relocation** to specific states/regions
+- Examples: "hybrid schedule", "2 days in office", "must be near our office", "willing to relocate"
 
 **"On-site"** = Requires physical office presence:
 - Job requires relocation or living in specific city
 - No remote work options mentioned
 - Must commute to office location
+- **Definitely requires relocation** to specific location
 
 **Use "Remote" for jobs that are fully remote even if they have geographic restrictions (like US/Canada only).**
 
 Use "" if unclear or insufficient information.
 
 "industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
-"skills": Top 5 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 5 skills, or fewer if less than 5 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
+"skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
 "matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
 
 1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
@@ -1189,6 +1195,17 @@ function updateBadgeForProfile() {
   // Find existing cover letter section
   let existingCoverLetterSection = badge.querySelector('.cover-letter-section');
   
+  // Prevent blinking by checking if we're already in the correct state
+  if (hasProfile && existingCoverLetterSection) {
+    // Profile is complete and cover letter section already exists - do nothing
+    return;
+  }
+  
+  if (!hasProfile && !existingCoverLetterSection) {
+    // Profile is incomplete and no cover letter section exists - do nothing
+    return;
+  }
+  
   if (hasProfile && !existingCoverLetterSection) {
     // Profile is complete but no cover letter section exists - add it
     const jobInfoSection = badge.querySelector('.job-info');
@@ -1251,7 +1268,7 @@ function updateBadgeForProfile() {
             loadCoverLetterPrompt();
           }
         }
-      }, 100);
+      }, 2000);
     }
   } else if (!hasProfile && existingCoverLetterSection) {
     // Profile is incomplete but cover letter section exists - remove it
@@ -1513,7 +1530,7 @@ function updateBadge() {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
-            padding: 8px;
+            padding: 3px;
             margin-bottom: 8px;
             text-align: center;
           ">
@@ -1550,7 +1567,6 @@ function updateBadge() {
           </div>
           
           <!-- Cover Letter Generation Section - Only show if profile is complete -->
-          ${userWorkExperience ? `
             <div class="cover-letter-section">
               <div class="cover-letter-title">✍️ Cover Letter Generator</div>
               <div class="cover-letter-input-container">
@@ -1575,7 +1591,6 @@ function updateBadge() {
                 <div class="cover-letter-content"></div>
               </div>
             </div>
-          ` : ''}
         `;
       } else {
       // Show enhanced loading UI when job info is not available
@@ -1688,7 +1703,7 @@ function updateBadge() {
         }
         
         // Check profile status and update badge accordingly
-        updateBadgeForProfile();
+        // updateBadgeForProfile();
         
         // Add reopen button event listener
         const reopenBtn = badge.querySelector('.reopen-btn');
@@ -1892,10 +1907,9 @@ badgeStyle.textContent = `
     width: 320px;
     height: auto;
     min-height: 200px;
-    max-height: 600px;
     user-select: none;
     box-sizing: border-box;
-    overflow: visible;
+    overflow: hidden;
   }
   
   #keyword-highlighter-badge:hover {
@@ -2375,6 +2389,12 @@ badgeStyle.textContent = `
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid #e2e8f0;
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
+  }
+  
+  .cover-letter-section.loading {
+    opacity: 0.7;
   }
   
   .cover-letter-title {
