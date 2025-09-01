@@ -171,11 +171,26 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey', 'userLocat
 
 // Listen for updates
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.keywords) {
-    keywords = changes.keywords.newValue || [];
-    removeHighlights();
-    processedElements = new WeakSet();
-    initializeHighlighter();
+  if (namespace === 'sync') {
+    if (changes.keywords) {
+      keywords = changes.keywords.newValue || [];
+      removeHighlights();
+      processedElements = new WeakSet();
+      initializeHighlighter();
+    }
+    
+    // Listen for profile changes to update cover letter section in real-time
+    if (changes.userWorkExperience || changes.userLocation) {
+      if (changes.userWorkExperience) {
+        userWorkExperience = changes.userWorkExperience.newValue;
+      }
+      if (changes.userLocation) {
+        userLocation = changes.userLocation.newValue;
+      }
+      
+      // Update badge UI to show/hide cover letter section
+      updateBadgeForProfile();
+    }
   }
 });
 
@@ -227,23 +242,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         highlight.style.color = getContrastColor(newColor);
       }
     });
+  } else if (request.action === 'profileUpdated') {
+    // Profile was updated from popup - update local variables and badge
+    if (request.workExperience !== undefined) {
+      userWorkExperience = request.workExperience;
+    }
+    if (request.userLocation !== undefined) {
+      userLocation = request.userLocation;
+    }
+    
+    // Update badge UI immediately to show/hide cover letter section
+    updateBadgeForProfile();
   }
   return true;
 });
 
-  // Get page load status for display
-  function getPageLoadStatus() {
-    if (loadFailed) {
+// Get page load status for display
+function getPageLoadStatus() {
+  if (loadFailed) {
       return `❌ Extraction Failed (${lastLoadError || 'Unknown error'}) - Click 🔄 to retry`;
-    } else if (loadAttempts >= 8) {
+  } else if (loadAttempts >= 8) {
       return `⚠️ Max Attempts Reached (${loadAttempts}/8) - 30s elapsed - Click 🔄 to retry`;
-    } else if (loadAttempts > 0) {
-      const elapsedSeconds = Math.floor(loadAttempts * 4);
-      return `🔄 Page Loading... (${loadAttempts}/8) - ${elapsedSeconds}s elapsed`;
-    } else {
-      return '✅ Page Ready';
-    }
+  } else if (loadAttempts > 0) {
+    const elapsedSeconds = Math.floor(loadAttempts * 4);
+    return `🔄 Page Loading... (${loadAttempts}/8) - ${elapsedSeconds}s elapsed`;
+  } else {
+    return '✅ Page Ready';
   }
+}
 
 // Reset load status for new page
 function resetLoadStatus() {
@@ -258,49 +284,49 @@ function retryJobExtraction() {
   startContinuousJobExtraction(); // Start continuous monitoring again
 }
 
-  // Manual job info extraction
-  function manualExtractJobInfo() {
-    
-    if (!openaiApiKey) {
-      alert('Please configure your OpenAI API key in the extension popup first.');
-      return;
-    }
+// Manual job info extraction
+function manualExtractJobInfo() {
+  
+  if (!openaiApiKey) {
+    alert('Please configure your OpenAI API key in the extension popup first.');
+    return;
+  }
     
     // Clear any existing intervals to prevent conflicts
     if (window.extractionInterval) {
       clearInterval(window.extractionInterval);
       window.extractionInterval = null;
     }
+  
+  // Reset load status and start fresh extraction
+  resetLoadStatus();
+  loadAttempts = 1;
+  
+  // Show immediate feedback
+  
+  // Update badge to show extraction in progress
+  updateBadge();
+  
+  // Start extraction immediately
+  extractJobInfo();
+  
+  // Show user feedback
+  const extractBtn = document.querySelector('.extract-job-btn');
+  if (extractBtn) {
+    extractBtn.textContent = '⏳';
+    extractBtn.title = 'Extracting...';
+    extractBtn.disabled = true;
     
-    // Reset load status and start fresh extraction
-    resetLoadStatus();
-    loadAttempts = 1;
-    
-    // Show immediate feedback
-    
-    // Update badge to show extraction in progress
-    updateBadge();
-    
-    // Start extraction immediately
-    extractJobInfo();
-    
-    // Show user feedback
-    const extractBtn = document.querySelector('.extract-job-btn');
-    if (extractBtn) {
-      extractBtn.textContent = '⏳';
-      extractBtn.title = 'Extracting...';
-      extractBtn.disabled = true;
-      
-      // Re-enable button after extraction completes
-      setTimeout(() => {
-        if (extractBtn) {
-          extractBtn.textContent = '🔍';
-          extractBtn.title = 'Extract Job Information';
-          extractBtn.disabled = false;
-        }
-      }, 5000);
-    }
+    // Re-enable button after extraction completes
+    setTimeout(() => {
+      if (extractBtn) {
+        extractBtn.textContent = '🔍';
+        extractBtn.title = 'Extract Job Information';
+        extractBtn.disabled = false;
+      }
+    }, 5000);
   }
+}
 
 // Update progress during extraction with smooth animations
 function updateExtractionProgress() {
@@ -324,20 +350,20 @@ function updateExtractionProgress() {
   }
 }
 
-  // Start continuous job extraction every 4 seconds for up to 30 seconds
-  function startContinuousJobExtraction() {
-    
-    let attempts = 0;
-    const maxAttempts = 8; // 30 seconds / 4 seconds = 7.5, so 8 attempts
-    const interval = 4000; // 4 seconds
+// Start continuous job extraction every 4 seconds for up to 30 seconds
+function startContinuousJobExtraction() {
+  
+  let attempts = 0;
+  const maxAttempts = 8; // 30 seconds / 4 seconds = 7.5, so 8 attempts
+  const interval = 4000; // 4 seconds
     
     // Clear any existing interval to prevent multiple intervals
     if (window.extractionInterval) {
       clearInterval(window.extractionInterval);
     }
-    
-    const extractionInterval = setInterval(() => {
-      attempts++;
+  
+  const extractionInterval = setInterval(() => {
+    attempts++;
     
     // Update badge to show progress
     loadAttempts = attempts;
@@ -511,9 +537,9 @@ async function extractJobInfo() {
        pageContent = pageContent.substring(0, 50000) + '... [Content truncated]';
      }
      console.log('Page Content:', pageContent);
-     
-     // Add timeout to prevent hanging
-     const controller = new AbortController();
+    
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
      const timeoutId = setTimeout(() => {
        controller.abort();
        console.log('⏰ Request timeout - aborting');
@@ -625,7 +651,7 @@ User Location: ${userLocation || 'Not specified'}`
           console.log('❌ Content does not start with JSON structure');
           console.log('❌ First 50 characters:', trimmedContent.substring(0, 50));
           lastLoadError = 'AI returned non-JSON response: ' + trimmedContent.substring(0, 100);
-          updateBadge();
+              updateBadge();
           return;
         }
         cleanedContent = trimmedContent;
@@ -672,20 +698,20 @@ User Location: ${userLocation || 'Not specified'}`
         } else {
           // No valid job data found
           lastLoadError = 'Incomplete job data from AI';
-          updateBadge();
+            updateBadge();
         }
       } catch (e) {
         // JSON parse failed
         console.log('❌ JSON Parse Error:', e.message);
         console.log('📄 Original content:', content);
         lastLoadError = 'JSON Parse Error: ' + e.message;
-        updateBadge();
+          updateBadge();
       }
     } else {
       // API request failed
       const errorText = await response.text();
       lastLoadError = `API Error: ${response.status} - ${errorText}`;
-      updateBadge();
+        updateBadge();
     }
   } catch (error) {
       // Handle network or other errors
@@ -744,7 +770,7 @@ function initializeBadgePosition(position) {
   const badge = document.getElementById('keyword-highlighter-badge');
   if (badge && position && position.left && position.top) {
     badge.style.left = position.left;
-    badge.style.top = position.top;   
+    badge.style.top = position.top;
   }
 }
 
@@ -755,9 +781,9 @@ function initializeHighlighter() {
   // Load Job Radar state from storage
   chrome.storage.sync.get(['jobRadarEnabled'], function(result) {
     jobRadarEnabled = result.jobRadarEnabled !== false; // Default to true if not set
-    
-    // Reset load status for new page
-    resetLoadStatus();
+
+  // Reset load status for new page
+  resetLoadStatus();
 
   // Clear previous observer
   if (observer) {
@@ -1012,6 +1038,261 @@ function removeHighlights() {
   });
 }
 
+// Generate cover letter using AI
+async function generateCoverLetter() {
+  const promptTextarea = document.querySelector('.cover-letter-prompt');
+  const generateBtn = document.querySelector('.generate-cover-letter-btn');
+  const coverLetterDisplay = document.querySelector('.generated-cover-letter');
+  const coverLetterContent = document.querySelector('.cover-letter-content');
+  
+  if (!promptTextarea || !generateBtn || !coverLetterDisplay || !coverLetterContent) {
+    console.error('Cover letter elements not found');
+    return;
+  }
+  
+  const prompt = promptTextarea.value.trim();
+  if (!prompt) {
+    alert('Please enter a cover letter prompt first.');
+    return;
+  }
+  
+  if (!openaiApiKey) {
+    alert('Please configure your OpenAI API key in the extension popup first.');
+    return;
+  }
+  
+  if (!userWorkExperience) {
+    alert('Please add your work experience in the Profile tab first.');
+    return;
+  }
+  
+  // Show loading state
+  generateBtn.textContent = '⏳';
+  generateBtn.disabled = true;
+  generateBtn.title = 'Generating...';
+  
+  try {
+    // Get the full page content
+    const pageContent = collectJobElements();
+    
+    // Prepare the AI request
+    const messages = [
+      {
+        role: "user",
+        content: `Generate a professional cover letter based on the following:
+
+**User's Work Experience:**
+${userWorkExperience}
+
+**User's Location:**
+${userLocation || 'Not specified'}
+
+**Job Posting Content:**
+${pageContent}
+
+**User's Cover Letter Prompt:**
+${prompt}
+
+Return only the cover letter text without any formatting or additional text.`
+      }
+    ];
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 800,
+        temperature: 0.7
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const coverLetter = data.choices[0].message.content.trim();
+      
+      // Display the generated cover letter
+      coverLetterContent.textContent = coverLetter;
+      coverLetterDisplay.style.display = 'block';
+      
+      // Show success feedback
+      generateBtn.textContent = '✅';
+      generateBtn.title = 'Generated Successfully!';
+      setTimeout(() => {
+        generateBtn.textContent = '📤';
+        generateBtn.title = 'Generate Cover Letter';
+        generateBtn.disabled = false;
+      }, 2000);
+      
+    } else {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${response.status} - ${errorText}`);
+    }
+    
+  } catch (error) {
+    console.error('Cover letter generation failed:', error);
+    alert(`Failed to generate cover letter: ${error.message}`);
+    
+    // Reset button state
+    generateBtn.textContent = '📤';
+    generateBtn.title = 'Generate Cover Letter';
+    generateBtn.disabled = false;
+  }
+}
+
+// Save cover letter prompt to storage
+function saveCoverLetterPrompt(prompt) {
+  chrome.storage.sync.set({ coverLetterPrompt: prompt }, function() {
+    console.log('Cover letter prompt saved:', prompt);
+  });
+}
+
+// Load cover letter prompt from storage
+function loadCoverLetterPrompt() {
+  chrome.storage.sync.get(['coverLetterPrompt'], function(result) {
+    if (result.coverLetterPrompt) {
+      const promptTextarea = document.querySelector('.cover-letter-prompt');
+      if (promptTextarea) {
+        promptTextarea.value = result.coverLetterPrompt;
+        // Update button state based on loaded prompt
+        updateGenerateButtonState(result.coverLetterPrompt);
+      }
+    } else {
+      // No saved prompt - ensure button is disabled
+      updateGenerateButtonState('');
+    }
+  });
+}
+
+// Update badge to show/hide cover letter section based on profile completion
+function updateBadgeForProfile() {
+  const badge = document.getElementById('keyword-highlighter-badge');
+  if (!badge) return;
+  
+  // Check if profile is complete
+  const hasProfile = userWorkExperience && userWorkExperience.trim().length > 0;
+  
+  // Find existing cover letter section
+  let existingCoverLetterSection = badge.querySelector('.cover-letter-section');
+  
+  if (hasProfile && !existingCoverLetterSection) {
+    // Profile is complete but no cover letter section exists - add it
+    const jobInfoSection = badge.querySelector('.job-info');
+    if (jobInfoSection) {
+      const coverLetterHTML = `
+        <div class="cover-letter-section">
+          <div class="cover-letter-title">✍️ Cover Letter Generator</div>
+          <div class="cover-letter-input-container">
+            <textarea 
+              class="cover-letter-prompt" 
+              placeholder="Enter your cover letter prompt here... (e.g., 'Write a professional cover letter highlighting my Python and React experience')"
+              rows="2"
+            ></textarea>
+            <button class="generate-cover-letter-btn" title="Enter a prompt to enable generation" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Generated Cover Letter Display -->
+          <div class="generated-cover-letter" style="display: none;">
+            <div class="cover-letter-header">
+              <span>📄 Generated Cover Letter</span>
+              <button class="copy-cover-letter-btn" title="Copy Cover Letter">📋</button>
+            </div>
+            <div class="cover-letter-content"></div>
+          </div>
+        </div>
+      `;
+      
+      // Insert after job info section
+      jobInfoSection.insertAdjacentHTML('afterend', coverLetterHTML);
+      
+      // Add event listeners to new elements
+      setTimeout(() => {
+        const newCoverLetterSection = badge.querySelector('.cover-letter-section');
+        if (newCoverLetterSection) {
+          // Add generate button event listener
+          const generateBtn = newCoverLetterSection.querySelector('.generate-cover-letter-btn');
+          if (generateBtn) {
+            generateBtn.addEventListener('click', generateCoverLetter);
+          }
+          
+          // Add copy button event listener
+          const copyBtn = newCoverLetterSection.querySelector('.copy-cover-letter-btn');
+          if (copyBtn) {
+            copyBtn.addEventListener('click', copyCoverLetter);
+          }
+          
+          // Add prompt saving event listener
+          const promptTextarea = newCoverLetterSection.querySelector('.cover-letter-prompt');
+          if (promptTextarea) {
+            promptTextarea.addEventListener('input', (e) => {
+              saveCoverLetterPrompt(e.target.value);
+              updateGenerateButtonState(e.target.value);
+            });
+            
+            // Load saved prompt and update button state
+            loadCoverLetterPrompt();
+          }
+        }
+      }, 100);
+    }
+  } else if (!hasProfile && existingCoverLetterSection) {
+    // Profile is incomplete but cover letter section exists - remove it
+    existingCoverLetterSection.remove();
+  }
+}
+
+// Update generate button state based on prompt content
+function updateGenerateButtonState(promptText) {
+  const generateBtn = document.querySelector('.generate-cover-letter-btn');
+  if (!generateBtn) return;
+  
+  const hasPrompt = promptText && promptText.trim().length > 0;
+  
+  if (hasPrompt) {
+    generateBtn.disabled = false;
+    generateBtn.title = 'Generate Cover Letter';
+    generateBtn.classList.remove('disabled');
+  } else {
+    generateBtn.disabled = true;
+    generateBtn.title = 'Enter a prompt to enable generation';
+    generateBtn.classList.add('disabled');
+  }
+}
+
+// Copy cover letter to clipboard
+function copyCoverLetter() {
+  const coverLetterContent = document.querySelector('.cover-letter-content');
+  if (!coverLetterContent || !coverLetterContent.textContent.trim()) {
+    alert('No cover letter available to copy.');
+    return;
+  }
+  
+  navigator.clipboard.writeText(coverLetterContent.textContent.trim()).then(() => {
+    // Show success feedback
+    const copyBtn = document.querySelector('.copy-cover-letter-btn');
+    if (copyBtn) {
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = '✅';
+      copyBtn.title = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+        copyBtn.title = 'Copy Cover Letter';
+      }, 2000);
+    }
+  }).catch(err => {
+    console.error('Failed to copy cover letter: ', err);
+    alert('Failed to copy to clipboard. Please try again.');
+  });
+}
+
 // Recalculate counts from DOM
 function recalculateCountsFromDOM() {
   matches = {};
@@ -1041,12 +1322,12 @@ function createBadge() {
   if (badge) {
     return badge; // Badge already exists
   }
-  
-  badge = document.createElement('div');
-  badge.id = 'keyword-highlighter-badge';
-  document.body.appendChild(badge);
 
-      // Add drag handle with beautiful modern design
+    badge = document.createElement('div');
+    badge.id = 'keyword-highlighter-badge';
+    document.body.appendChild(badge);
+
+    // Add drag handle with beautiful modern design
     const dragHandle = document.createElement('div');
     dragHandle.className = 'badge-drag-handle';
     dragHandle.innerHTML = `
@@ -1126,26 +1407,26 @@ function createBadge() {
     
     dragHandle.appendChild(closeButton);
 
-  badge.appendChild(dragHandle);
+    badge.appendChild(dragHandle);
 
-  // Create content container
-  const contentContainer = document.createElement('div');
-  contentContainer.className = 'badge-content';
-  badge.appendChild(contentContainer);
+    // Create content container
+    const contentContainer = document.createElement('div');
+    contentContainer.className = 'badge-content';
+    badge.appendChild(contentContainer);
 
-  // Add drag functionality
-  setupDragHandling(badge, dragHandle);
-  
-  // Load saved position
-  loadBadgePosition(badge);
-  
-  // Add copy button event listener
-  setTimeout(() => {
-    const copyBtn = badge.querySelector('.copy-job-btn');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', copyJobToClipboard);
-    }
-  }, 100);
+    // Add drag functionality
+    setupDragHandling(badge, dragHandle);
+    
+    // Load saved position
+    loadBadgePosition(badge);
+    
+    // Add copy button event listener
+    setTimeout(() => {
+      const copyBtn = badge.querySelector('.copy-job-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', copyJobToClipboard);
+      }
+    }, 100);
   
   return badge;
 }
@@ -1194,7 +1475,7 @@ function updateBadge() {
       </div>
     `;
   } else {
-    // Add job information if available
+  // Add job information if available
     if (jobInfo) {
       // Check location compatibility
       let locationAlert = '';
@@ -1233,12 +1514,12 @@ function updateBadge() {
         `;
       }
       
-      content += `
-        <div class="job-info">
+        content += `
+          <div class="job-info">
           ${locationAlert}
           ${matchRateDisplay}
           <div class="job-info-title">Job Information <span class="job-type-${jobInfo.jobType === 'Remote' ? 'green' : 'red'}"> - ${escapeHtml(jobInfo.jobType || 'No Sure')}</span></div>
-          Company: ${escapeHtml(jobInfo.company || '')}<br>
+            Company: ${escapeHtml(jobInfo.company || '')}<br>
           Position: ${escapeHtml(jobInfo.position || '')}<br>
           Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span>
           ${jobInfo.skills && jobInfo.skills.length > 0 ? `
@@ -1253,15 +1534,44 @@ function updateBadge() {
               </div>
             </div>
           ` : ''}
-        </div>
-        <div class="button-row">
-          <button class="copy-job-btn" title="Copy to Google Sheets">📋</button>
-          <button class="extract-job-btn" title="Extract Job Information">🔍</button>
-        </div>
-      `;
-    } else {
+            <!-- Job Info Buttons moved here -->
+            <div class="job-info-buttons">
+              <button class="copy-job-btn" title="Copy to Google Sheets">📋</button>
+              <button class="extract-job-btn" title="Extract Job Information">🔍</button>
+            </div>
+          </div>
+          
+          <!-- Cover Letter Generation Section - Only show if profile is complete -->
+          ${userWorkExperience ? `
+            <div class="cover-letter-section">
+              <div class="cover-letter-title">✍️ Cover Letter Generator</div>
+              <div class="cover-letter-input-container">
+                <textarea 
+                  class="cover-letter-prompt" 
+                  placeholder="Enter your cover letter prompt here... (e.g., 'Write a professional cover letter highlighting my Python and React experience')"
+                  rows="3"
+                ></textarea>
+                <button class="generate-cover-letter-btn" title="Enter a prompt to enable generation" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <!-- Generated Cover Letter Display -->
+              <div class="generated-cover-letter" style="display: none;">
+                <div class="cover-letter-header">
+                  <span>📄 Generated Cover Letter</span>
+                  <button class="copy-cover-letter-btn" title="Copy Cover Letter">📋</button>
+                </div>
+                <div class="cover-letter-content"></div>
+              </div>
+            </div>
+          ` : ''}
+        `;
+      } else {
       // Show enhanced loading UI when job info is not available
-      content += `
+        content += `
         <div class="job-info loading-ui">
           <div class="job-info-title">🔄 Job Detection Status</div>
           <div class="status-grid">
@@ -1301,7 +1611,7 @@ function updateBadge() {
           </div>
         `;
       }
-  }
+      }
 
   const sortedKeywords = Object.entries(matches)
     .filter(([_, count]) => count > 0)
@@ -1342,8 +1652,35 @@ function updateBadge() {
         // Add extract job button event listener
         const extractBtn = badge.querySelector('.extract-job-btn');
         if (extractBtn) {
-          extractBtn.addEventListener('click', manualExtractJobInfo); 
+          extractBtn.addEventListener('click', manualExtractJobInfo);
         }
+        
+        // Add cover letter generation button event listener
+        const generateCoverLetterBtn = badge.querySelector('.generate-cover-letter-btn');
+        if (generateCoverLetterBtn) {
+          generateCoverLetterBtn.addEventListener('click', generateCoverLetter);
+        }
+        
+        // Add copy cover letter button event listener
+        const copyCoverLetterBtn = badge.querySelector('.copy-cover-letter-btn');
+        if (copyCoverLetterBtn) {
+          copyCoverLetterBtn.addEventListener('click', copyCoverLetter);
+        }
+        
+        // Add cover letter prompt saving event listener
+        const coverLetterPrompt = badge.querySelector('.cover-letter-prompt');
+        if (coverLetterPrompt) {
+          coverLetterPrompt.addEventListener('input', (e) => {
+            saveCoverLetterPrompt(e.target.value);
+            updateGenerateButtonState(e.target.value);
+          });
+          
+          // Load saved prompt and update button state
+          loadCoverLetterPrompt();
+        }
+        
+        // Check profile status and update badge accordingly
+        updateBadgeForProfile();
         
         // Add reopen button event listener
         const reopenBtn = badge.querySelector('.reopen-btn');
@@ -1680,7 +2017,7 @@ badgeStyle.textContent = `
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    align-items: center; 
+    align-items: center;
     gap: 2px;
   }
   
@@ -2023,6 +2360,184 @@ badgeStyle.textContent = `
   .skill-tag:hover {
     transform: translateY(-1px) !important;
     box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4) !important;
+  }
+  
+  /* Cover Letter Generation Styles */
+  .cover-letter-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+  }
+  
+  .cover-letter-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  
+  .cover-letter-input-container {
+    position: relative;
+    width: 100%;
+  }
+  
+  .cover-letter-prompt {
+    width: 100%;
+    padding: 8px 40px 8px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+    background: #f9fafb;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+  
+  .cover-letter-prompt:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+  
+  .generate-cover-letter-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  
+  .generate-cover-letter-btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+  
+  .generate-cover-letter-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .generate-cover-letter-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  /* Disabled button state */
+  .generate-cover-letter-btn.disabled {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%) !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+  }
+  
+  .generate-cover-letter-btn.disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .generated-cover-letter {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+  
+  .cover-letter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+  }
+  
+  .copy-cover-letter-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .copy-cover-letter-btn:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: scale(1.05);
+  }
+  
+  .cover-letter-content {
+    font-size: 11px;
+    line-height: 1.5;
+    color: #374151;
+    background: white;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #e1e5e9;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  
+  /* Job Info Buttons Styles */
+  .job-info-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    justify-content: center;
+  }
+  
+  .job-info-buttons .copy-job-btn,
+  .job-info-buttons .extract-job-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+  }
+  
+  .job-info-buttons .copy-job-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+  
+  .job-info-buttons .extract-job-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+  }
+  
+  .job-info-buttons .copy-job-btn:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: scale(1.05);
+  }
+  
+  .job-info-buttons .extract-job-btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: scale(1.05);
   }
 `;
 document.head.appendChild(badgeStyle);

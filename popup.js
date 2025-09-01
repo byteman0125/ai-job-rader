@@ -87,6 +87,18 @@ document.addEventListener('DOMContentLoaded', function() {
         editLocation.style.display = 'inline-block';
         showStatusMessage(locationStatus, 'Location saved successfully!', 'success');
         updateProfileSummary();
+        
+        // Notify content script about profile update
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: 'profileUpdated',
+              userLocation: location
+            }).catch(() => {
+              // Ignore errors for tabs that don't have the content script
+            });
+          }
+        });
       });
     } else {
       showStatusMessage(locationStatus, 'Please enter a location', 'error');
@@ -112,6 +124,18 @@ document.addEventListener('DOMContentLoaded', function() {
         editExperience.style.display = 'inline-block';
         showStatusMessage(experienceStatus, 'Work experience saved successfully!', 'success');
         updateProfileSummary();
+        
+        // Notify content script about profile update
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: 'profileUpdated',
+              workExperience: experience
+            }).catch(() => {
+              // Ignore errors for tabs that don't have the content script
+            });
+          }
+        });
       });
     } else {
       showStatusMessage(experienceStatus, 'Please enter your work experience', 'error');
