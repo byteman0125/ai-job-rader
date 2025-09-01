@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyword Highlighter Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border-left: 4px solid #667eea;
+        }
+        
+        .demo-section h2 {
+            color: #4a5568;
+            margin-top: 0;
+        }
+        
+        .keyword-example {
+            background: #FF6B6B;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 0 4px;
+            display: inline-block;
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+        }
+        
+        .keyword-example.remote { background: #FF6B6B; }
+        .keyword-example.startup { background: #4ECDC4; }
+        .keyword-example.hybrid { background: #96CEB4; }
+        .keyword-example.onsite { background: #45B7D1; }
+        .keyword-example.relocate { background: #DDA0DD; }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 18px;
+            margin: 20px 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .highlight-demo {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px dashed #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Keyword Highlighter</h1>
+        
+        <div class="demo-section">
+            <h2>✨ Beautiful New UI</h2>
+            <p>Your Keyword Highlighter extension now features a stunning, modern interface with:</p>
+            <ul class="feature-list">
+                <li>
+                    <div class="feature-icon">🎨</div>
+                    <span>Gradient backgrounds and modern color schemes</span>
+                </li>
+                <li>
+                    <div class="feature-icon">✨</div>
+                    <span>Smooth animations and hover effects</span>
+                </li>
+                <li>
+                    <div class="feature-icon">📱</div>
+                    <span>Responsive design with beautiful typography</span>
+                </li>
+                <li>
+                    <div class="feature-icon">🎯</div>
+                    <span>Enhanced user experience with better feedback</span>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="demo-section">
+            <h2>🎯 Test Keywords</h2>
+            <p>This page contains several keywords that should be highlighted when you have the extension active:</p>
+            
+            <div class="highlight-demo">
+                <p>Looking for a <span class="keyword-example remote">Remote</span> job opportunity? Consider joining a <span class="keyword-example startup">Startup</span> that offers <span class="keyword-example hybrid">Hybrid</span> work arrangements.</p>
+                
+                <p>Some companies require <span class="keyword-example onsite">On-site</span> presence, while others may ask you to <span class="keyword-example relocate">Relocate</span> for the position.</p>
+                
+                <p>Whether you prefer <span class="keyword-example remote">Remote</span> work or <span class="keyword-example hybrid">Hybrid</span> arrangements, there are many opportunities available in the tech industry.</p>
+            </div>
+        </div>
+        
+        <div class="demo-section">
+            <h2>🚀 How to Use</h2>
+            <ol>
+                <li>Install the Keyword Highlighter extension</li>
+                <li>Click the extension icon to open the beautiful popup</li>
+                <li>Add your own keywords with custom colors</li>
+                <li>Browse any webpage and see your keywords highlighted automatically</li>
+                <li>Use the floating badge to see match counts in real-time</li>
+            </ol>
+        </div>
+        
+        <div class="text-center">
+            <a href="#" class="cta-button" onclick="alert('Extension popup should open when you click the extension icon!')">
+                🎉 Try the New UI!
+            </a>
+        </div>
+        
+        <div class="demo-section">
+            <h2>💡 Pro Tips</h2>
+            <ul>
+                <li>Use the Enter key to quickly add keywords</li>
+                <li>Drag the floating badge to reposition it</li>
+                <li>Hover over highlighted keywords for enhanced effects</li>
+                <li>Customize colors to match your preferences</li>
+                <li>The extension works on all websites automatically</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

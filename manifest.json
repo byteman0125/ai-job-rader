@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AI Job Radar",
+  "version": "1.0",
+  "description": "Highlights predefined keywords on web pages with customizable colors and extracts job information",
+  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite"],
+  "host_permissions": ["https://api.openai.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Job Radar"
+  },
+  "icons": {
+    "16": "icon16.svg",
+    "48": "icon48.svg",
+    "128": "icon128.svg"
+  }
+}
