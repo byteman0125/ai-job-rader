@@ -564,23 +564,33 @@ async function extractJobInfo() {
 
 "company": The hiring company name (e.g., "Metronome", "Axuall", "Jumpapp.com", "AutoAssist", "Samsara", "Maple", "KeyBank", "Immuta", "Staff4Me"). Look for company names in page titles, headers, logos, "About" sections, or company descriptions. IMPORTANT: Check the page title first - if it contains both job title and company name (e.g., "Senior Software Engineer - Staff4Me"), extract the company name part. Also look for company names in H1, H2, H3 elements and header areas. If company name is not clearly identifiable, use empty string "".
 
-"jobType": Analyze work arrangement considering:
-1. Location restrictions (states, cities, regions mentioned)
-2. Office presence (mentions of physical offices, hybrid options)
-3. Geographic limitations (specific states where company operates)
-4. Remote qualifications (truly work-from-anywhere vs location-dependent remote)
+"jobType": Analyze work arrangement from FULL CONTENT:
 
-Use "Remote" only if truly work-from-anywhere with no location restrictions.
-Use "Hybrid" if remote work has location limitations, hybrid options mentioned, or requires specific geographic areas.
-Use "On-site" if requires specific office location or relocation.
+**SEMANTIC ANALYSIS**: Look for work arrangement patterns, location requirements, and physical presence needs.
+
+**"Remote"** = Work from anywhere with no physical office presence required:
+- Job explicitly states "remote", "work from anywhere", "distributed team"
+- No mention of office visits, commute, or physical presence
+- May have geographic restrictions (US only, Canada only, etc.) but still fully remote
+- Examples: "remote within US", "work from anywhere in Canada", "fully distributed team"
+
+**"Hybrid"** = Requires some physical office presence:
+- Job mentions hybrid schedules, office visits, or commute requirements
+- Requires living near specific office locations
+- Mix of remote and in-office work
+- Examples: "hybrid schedule", "2 days in office", "must be near our office"
+
+**"On-site"** = Requires physical office presence:
+- Job requires relocation or living in specific city
+- No remote work options mentioned
+- Must commute to office location
+
+**Use "Remote" for jobs that are fully remote even if they have geographic restrictions (like US/Canada only).**
+
 Use "" if unclear or insufficient information.
 
-CRITICAL: Look for phrases like "from a state where", "relocate to", "hybrid or in-office", "specific markets", geographic restrictions.
-
 "industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
-
 "skills": Top 5 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 5 skills, or fewer if less than 5 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
-
 "matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
 
 1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
@@ -602,7 +612,7 @@ Return only the percentage number (e.g., 85) without any text or symbols.
 
 The HTML structure will help you identify the main job title and company name more accurately.
 
-SEMANTIC ANALYSIS: For job type detection, analyze the FULL CONTENT semantically. Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
+Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
 
 CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".`
         }, {
@@ -1498,7 +1508,6 @@ function updateBadge() {
       // Match rate display
       let matchRateDisplay = '';
       if (jobInfo.matchRate > 0) {
-        const matchColor = jobInfo.matchRate >= 80 ? '#10b981' : jobInfo.matchRate >= 60 ? '#f59e0b' : '#ef4444';
         matchRateDisplay = `
           <div class="match-rate" style="
             background: #f8fafc;
@@ -1508,8 +1517,7 @@ function updateBadge() {
             margin-bottom: 8px;
             text-align: center;
           ">
-            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Match Rate</div>
-            <div style="font-size: 16px; font-weight: 600; color: ${matchColor};">${jobInfo.matchRate}%</div>
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Match Rate - ${jobInfo.matchRate}%</div>
           </div>
         `;
       }
