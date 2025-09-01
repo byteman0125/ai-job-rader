@@ -456,7 +456,10 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="keyword-color" style="background-color: ${keywordObj.color}"></div>
           <div class="keyword-text">${escapeHtml(capitalizedKeyword)}</div>
         </div>
-        <button class="delete-btn" data-index="${index}" title="Delete keyword">🗑️</button>
+        <div class="keyword-controls">
+          <input type="color" class="keyword-color-picker" value="${keywordObj.color}" data-index="${index}" title="Change color">
+          <button class="delete-btn" data-index="${index}" title="Delete keyword">🗑️</button>
+        </div>
       `;
       keywordList.appendChild(item);
     });
@@ -479,6 +482,38 @@ document.addEventListener('DOMContentLoaded', function() {
             });
           });
         }
+      });
+    });
+    
+    // Add event listeners to color pickers
+    document.querySelectorAll('.keyword-color-picker').forEach(colorPicker => {
+      colorPicker.addEventListener('change', function() {
+        const index = parseInt(this.getAttribute('data-index'));
+        const newColor = this.value;
+        
+        chrome.storage.sync.get(['keywords'], function(result) {
+          const keywords = [...result.keywords];
+          keywords[index].color = newColor;
+          chrome.storage.sync.set({keywords}, function() {
+            // Update the color display immediately
+            const keywordItem = colorPicker.closest('.keyword-item');
+            const colorDisplay = keywordItem.querySelector('.keyword-color');
+            colorDisplay.style.backgroundColor = newColor;
+            
+            // Send message to content script to update highlighting
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+              if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                  action: 'updateKeywordColor',
+                  keyword: keywords[index].text,
+                  newColor: newColor
+                });
+              }
+            });
+            
+            showSuccessMessage('Color updated successfully!');
+          });
+        });
       });
     });
   }

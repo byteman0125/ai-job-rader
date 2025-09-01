@@ -204,6 +204,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         badge.style.display = 'none';
       }
     }
+  } else if (request.action === 'updateKeywordColor') {
+    // Update keyword color in existing highlights
+    const keyword = request.keyword;
+    const newColor = request.newColor;
+    
+    // Find all highlights for this keyword and update their colors
+    document.querySelectorAll('.keyword-highlight').forEach(highlight => {
+      if (highlight.textContent.toLowerCase().includes(keyword.toLowerCase())) {
+        highlight.style.backgroundColor = newColor;
+        highlight.style.color = getContrastColor(newColor);
+      }
+    });
   }
   return true;
 });
@@ -515,7 +527,18 @@ async function extractJobInfo() {
 
 "company": The hiring company name (e.g., "Metronome", "Axuall", "Jumpapp.com", "AutoAssist", "Samsara", "Maple", "KeyBank", "Immuta", "Staff4Me"). Look for company names in page titles, headers, logos, "About" sections, or company descriptions. IMPORTANT: Check the page title first - if it contains both job title and company name (e.g., "Senior Software Engineer - Staff4Me"), extract the company name part. Also look for company names in H1, H2, H3 elements and header areas. If company name is not clearly identifiable, use empty string "".
 
-"jobType": Work arrangement - Look for job-specific work arrangement indicators. Use "Remote" if job has "Remote" tags/badges or explicitly states remote work for this position, "Hybrid" if job mentions hybrid requirements for this position, "On-site" if job requires office presence for this position, or "" if unclear. CRITICAL: If job posting shows "Remote" tags/badges, classify as "Remote" regardless of any general company workplace policies mentioned elsewhere.
+"jobType": Analyze work arrangement considering:
+1. Location restrictions (states, cities, regions mentioned)
+2. Office presence (mentions of physical offices, hybrid options)
+3. Geographic limitations (specific states where company operates)
+4. Remote qualifications (truly work-from-anywhere vs location-dependent remote)
+
+Use "Remote" only if truly work-from-anywhere with no location restrictions.
+Use "Hybrid" if remote work has location limitations, hybrid options mentioned, or requires specific geographic areas.
+Use "On-site" if requires specific office location or relocation.
+Use "" if unclear or insufficient information.
+
+CRITICAL: Look for phrases like "from a state where", "relocate to", "hybrid or in-office", "specific markets", geographic restrictions.
 
 "industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
 

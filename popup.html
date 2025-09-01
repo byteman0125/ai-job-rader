@@ -616,6 +616,32 @@
       border-color: #cbd5e1;
     }
     
+    .keyword-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .keyword-color-picker {
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 0;
+      background: transparent;
+    }
+    
+    .keyword-color-picker::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    
+    .keyword-color-picker::-webkit-color-swatch {
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
     .keyword-content {
       display: flex;
       align-items: center;
@@ -821,13 +847,10 @@
     
     <div class="tabs">
       <div class="tab active" data-tab="url-opener">
-        <span>🔗 URL Opener</span>
+        <span>URL Open & AI</span>
       </div>
       <div class="tab" data-tab="keywords">
-        <span>🔑 Keywords</span>
-      </div>
-      <div class="tab" data-tab="ai-settings">
-        <span>🤖 AI Settings</span>
+        <span>Highlighting</span>
       </div>
     </div>
     
@@ -836,7 +859,7 @@
         <div class="section-title">Add New Keyword</div>
         <div class="input-group">
           <input type="text" id="keywordInput" class="keyword-input" placeholder="Enter keyword to highlight...">
-          <input type="color" id="colorPicker" class="color-picker" value="#FF6B6B">
+          <input type="color" id="colorPicker" class="color-picker" value="#FF6B6B" title="Choose highlight color">
           <button id="addKeyword" class="add-btn">Add</button>
         </div>
       </div>
@@ -849,7 +872,18 @@
       </div>
     </div>
     
-    <div class="tab-content" id="ai-settings-tab">
+
+    
+    <div class="tab-content active" id="url-opener-tab">
+            <div class="section">
+        <div class="section-title">Open Multiple URLs</div>
+        <div class="url-form">
+          <textarea id="urlTextarea" class="url-textarea" placeholder="Paste URLs here, one per line or separated by commas..."></textarea>
+          <button id="openUrlsBtn" class="open-btn">🚀 Open All URLs</button>
+        </div>
+        <div id="urlStatus" class="url-status" style="display: none;"></div>
+      </div>
+      
       <div class="section">
         <div class="section-title">OpenAI API Configuration</div>
         <div class="api-form">
@@ -865,30 +899,6 @@
         </div>
       </div>
       
-
-      
-    </div>
-    
-    <div class="tab-content active" id="url-opener-tab">
-      <div class="section">
-        <div class="section-title">Open Multiple URLs</div>
-        <div class="url-form">
-          <textarea id="urlTextarea" class="url-textarea" placeholder="Paste URLs here, one per line or separated by commas..."></textarea>
-          <button id="openUrlsBtn" class="open-btn">🚀 Open All URLs</button>
-        </div>
-        <div id="urlStatus" class="url-status" style="display: none;"></div>
-      </div>
-      
-      <div class="section">
-        <div class="section-title">Instructions</div>
-        <div style="background: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0;">
-          <div style="font-size: 12px; color: #64748b; line-height: 1.4;">
-            • Paste URLs from your clipboard (one per line or comma-separated)<br>
-            • Click "Open All URLs" to open each URL in a new tab<br>
-            • Perfect for opening multiple job postings or research pages
-          </div>
-        </div>
-      </div>
     </div>
     
     <div class="stats">
