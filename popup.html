@@ -197,6 +197,102 @@
       color: #374151;
     }
     
+    /* Profile Tab Styles */
+    .profile-form {
+      margin-bottom: 16px;
+    }
+    
+    .location-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 8px;
+      transition: border-color 0.3s ease;
+    }
+    
+    .location-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .experience-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 8px;
+      transition: border-color 0.3s ease;
+    }
+    
+    .experience-textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .experience-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .status-message {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    
+    .status-message.success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    
+    .status-message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+    
+    .profile-summary {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .summary-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .summary-label {
+      font-weight: 500;
+      color: #374151;
+      font-size: 13px;
+    }
+    
+    .summary-value {
+      color: #6b7280;
+      font-size: 13px;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+    
     .header .subtitle {
       font-size: 12px;
       opacity: 0.9;
@@ -849,6 +945,9 @@
       <div class="tab active" data-tab="url-opener">
         <span>URL Open & AI</span>
       </div>
+      <div class="tab" data-tab="profile">
+        <span>👤 Profile</span>
+      </div>
       <div class="tab" data-tab="keywords">
         <span>Highlighting</span>
       </div>
@@ -868,6 +967,44 @@
         <div class="section-title">Your Keywords</div>
         <div class="keyword-list" id="keywordList">
           <div class="empty-state">No keywords added yet<br>Start by adding your first keyword above!</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="tab-content" id="profile-tab">
+      <div class="section">
+        <div class="section-title">Your Location</div>
+        <div class="profile-form">
+          <input type="text" id="userLocation" class="location-input" placeholder="Enter your state (e.g., California, NY, Texas)">
+          <button id="saveLocation" class="save-btn">Save Location</button>
+          <button id="editLocation" class="edit-btn" style="display: none;">✏️ Edit</button>
+        </div>
+        <div id="locationStatus" class="status-message" style="display: none;"></div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Work Experience</div>
+        <div class="profile-form">
+          <textarea id="workExperience" class="experience-textarea" placeholder="Paste your work experience here..."></textarea>
+          <div class="experience-buttons">
+            <button id="saveExperience" class="save-btn">Save Experience</button>
+            <button id="editExperience" class="edit-btn" style="display: none;">✏️ Edit</button>
+          </div>
+        </div>
+        <div id="experienceStatus" class="status-message" style="display: none;"></div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Profile Summary</div>
+        <div class="profile-summary">
+          <div class="summary-item">
+            <span class="summary-label">Location:</span>
+            <span id="profileLocation" class="summary-value">Not set</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Experience:</span>
+            <span id="profileExperience" class="summary-value">Not set</span>
+          </div>
         </div>
       </div>
     </div>

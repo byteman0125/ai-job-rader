@@ -4,6 +4,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const aboutModal = document.getElementById('aboutModal');
   const closeModal = document.getElementById('closeModal');
   
+  // Profile elements
+  const userLocation = document.getElementById('userLocation');
+  const saveLocation = document.getElementById('saveLocation');
+  const editLocation = document.getElementById('editLocation');
+  const locationStatus = document.getElementById('locationStatus');
+  
+  const workExperience = document.getElementById('workExperience');
+  const saveExperience = document.getElementById('saveExperience');
+  const editExperience = document.getElementById('editExperience');
+  const experienceStatus = document.getElementById('experienceStatus');
+  
+  const profileLocation = document.getElementById('profileLocation');
+  const profileExperience = document.getElementById('profileExperience');
+  
   const keywordInput = document.getElementById('keywordInput');
   const colorPicker = document.getElementById('colorPicker');
   const addButton = document.getElementById('addKeyword');
@@ -42,6 +56,95 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Escape' && aboutModal.style.display === 'flex') {
       aboutModal.style.display = 'none';
     }
+  });
+  
+  // Profile functionality
+  function showStatusMessage(element, message, type) {
+    element.textContent = message;
+    element.className = `status-message ${type}`;
+    element.style.display = 'block';
+    
+    setTimeout(() => {
+      element.style.display = 'none';
+    }, 3000);
+  }
+  
+  function updateProfileSummary() {
+    chrome.storage.sync.get(['userLocation', 'workExperience'], function(result) {
+      profileLocation.textContent = result.userLocation || 'Not set';
+      profileExperience.textContent = result.workExperience ? 'Set' : 'Not set';
+    });
+  }
+  
+  // Location functionality
+  saveLocation.addEventListener('click', function() {
+    const location = userLocation.value.trim();
+    if (location) {
+      chrome.storage.sync.set({userLocation: location}, function() {
+        userLocation.disabled = true;
+        userLocation.classList.add('disabled');
+        saveLocation.style.display = 'none';
+        editLocation.style.display = 'inline-block';
+        showStatusMessage(locationStatus, 'Location saved successfully!', 'success');
+        updateProfileSummary();
+      });
+    } else {
+      showStatusMessage(locationStatus, 'Please enter a location', 'error');
+    }
+  });
+  
+  editLocation.addEventListener('click', function() {
+    userLocation.disabled = false;
+    userLocation.classList.remove('disabled');
+    saveLocation.style.display = 'inline-block';
+    editLocation.style.display = 'none';
+    userLocation.focus();
+  });
+  
+  // Experience functionality
+  saveExperience.addEventListener('click', function() {
+    const experience = workExperience.value.trim();
+    if (experience) {
+      chrome.storage.sync.set({workExperience: experience}, function() {
+        workExperience.disabled = true;
+        workExperience.classList.add('disabled');
+        saveExperience.style.display = 'none';
+        editExperience.style.display = 'inline-block';
+        showStatusMessage(experienceStatus, 'Work experience saved successfully!', 'success');
+        updateProfileSummary();
+      });
+    } else {
+      showStatusMessage(experienceStatus, 'Please enter your work experience', 'error');
+    }
+  });
+  
+  editExperience.addEventListener('click', function() {
+    workExperience.disabled = false;
+    workExperience.classList.remove('disabled');
+    saveExperience.style.display = 'inline-block';
+    editExperience.style.display = 'none';
+    workExperience.focus();
+  });
+  
+  // Load saved profile data
+  chrome.storage.sync.get(['userLocation', 'workExperience'], function(result) {
+    if (result.userLocation) {
+      userLocation.value = result.userLocation;
+      userLocation.disabled = true;
+      userLocation.classList.add('disabled');
+      saveLocation.style.display = 'none';
+      editLocation.style.display = 'inline-block';
+    }
+    
+    if (result.workExperience) {
+      workExperience.value = result.workExperience;
+      workExperience.disabled = true;
+      workExperience.classList.add('disabled');
+      saveExperience.style.display = 'none';
+      editExperience.style.display = 'inline-block';
+    }
+    
+    updateProfileSummary();
   });
   
   // Job Radar toggle functionality

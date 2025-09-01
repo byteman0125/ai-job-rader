@@ -18,6 +18,8 @@ let lastLoadError = null;
 let isRequestInProgress = false; // Prevent multiple simultaneous requests
 let blockedRequests = 0; // Track blocked requests
 let jobRadarEnabled = true; // Default to enabled
+let userLocation = null;
+let userWorkExperience = null;
 
   // Helper function to remove unnecessary elements from HTML content
   function cleanHtmlContent(htmlContent) {
@@ -133,7 +135,7 @@ const defaultKeywords = [
 ];
 
 // Load settings from storage including badge position
-chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey'], (result) => {
+chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey', 'userLocation', 'workExperience'], (result) => {
 
   if (result.keywords && result.keywords.length > 0) {
     keywords = result.keywords;
@@ -146,6 +148,15 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey'], (result) 
   // Load saved API key
   if (result.openaiApiKey) {
     openaiApiKey = result.openaiApiKey;
+  }
+  
+  // Load user profile data
+  if (result.userLocation) {
+    userLocation = result.userLocation;
+  }
+  
+  if (result.workExperience) {
+    userWorkExperience = result.workExperience;
   }
 
   initializeHighlighter();
@@ -544,6 +555,25 @@ CRITICAL: Look for phrases like "from a state where", "relocate to", "hybrid or 
 
 "skills": Top 5 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 5 skills, or fewer if less than 5 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
 
+"matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
+
+1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
+2. **Frameworks & Libraries**: Django, React, Spring Boot, Node.js, etc.
+3. **Databases**: PostgreSQL, MongoDB, Redis, Elasticsearch, etc.
+4. **Cloud & DevOps**: AWS, Docker, Kubernetes, Terraform, CI/CD tools
+5. **Tools & Technologies**: Git, REST APIs, microservices, etc.
+
+**Scoring Breakdown:**
+- 90-100%: Excellent tech stack match (most skills align)
+- 70-89%: Good tech stack match (many skills align)
+- 50-69%: Moderate tech stack match (some skills align)
+- 30-49%: Poor tech stack match (few skills align)
+- 0-29%: Very poor tech stack match (minimal skills align)
+
+**Focus on technical skills overlap, NOT years of experience or general qualifications.**
+
+Return only the percentage number (e.g., 85) without any text or symbols.
+
 The HTML structure will help you identify the main job title and company name more accurately.
 
 SEMANTIC ANALYSIS: For job type detection, analyze the FULL CONTENT semantically. Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
@@ -551,7 +581,13 @@ SEMANTIC ANALYSIS: For job type detection, analyze the FULL CONTENT semantically
 CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".`
         }, {
           role: 'user',
-          content: pageContent
+          content: `Job Posting Content:
+${pageContent}
+
+User Work Experience:
+${userWorkExperience || 'No work experience provided'}
+
+User Location: ${userLocation || 'Not specified'}`
         }],
         max_tokens: 1000,
         temperature: 0.1
@@ -627,7 +663,8 @@ CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explan
             company: company,
             jobType: jobType,
             industry: (jobData.industry || '').trim(),
-            skills: Array.isArray(jobData.skills) ? jobData.skills : []
+            skills: Array.isArray(jobData.skills) ? jobData.skills : [],
+            matchRate: jobData.matchRate || 0
           };
           loadFailed = false;
           lastLoadError = null;
@@ -1159,8 +1196,47 @@ function updateBadge() {
   } else {
     // Add job information if available
     if (jobInfo) {
+      // Check location compatibility
+      let locationAlert = '';
+      if (userLocation && jobInfo.jobType !== 'Remote') {
+        locationAlert = `
+          <div class="location-alert" style="
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            color: #92400e;
+          ">
+            ⚠️ Location Alert: This job requires location presence. You're looking for fully remote roles.
+          </div>
+        `;
+      }
+      
+      // Match rate display
+      let matchRateDisplay = '';
+      if (jobInfo.matchRate > 0) {
+        const matchColor = jobInfo.matchRate >= 80 ? '#10b981' : jobInfo.matchRate >= 60 ? '#f59e0b' : '#ef4444';
+        matchRateDisplay = `
+          <div class="match-rate" style="
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            text-align: center;
+          ">
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Match Rate</div>
+            <div style="font-size: 16px; font-weight: 600; color: ${matchColor};">${jobInfo.matchRate}%</div>
+          </div>
+        `;
+      }
+      
       content += `
         <div class="job-info">
+          ${locationAlert}
+          ${matchRateDisplay}
           <div class="job-info-title">Job Information <span class="job-type-${jobInfo.jobType === 'Remote' ? 'green' : 'red'}"> - ${escapeHtml(jobInfo.jobType || 'No Sure')}</span></div>
           Company: ${escapeHtml(jobInfo.company || '')}<br>
           Position: ${escapeHtml(jobInfo.position || '')}<br>
