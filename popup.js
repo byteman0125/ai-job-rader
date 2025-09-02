@@ -34,6 +34,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Job Radar toggle element
   const jobRadarToggle = document.getElementById('jobRadarToggle');
+  // Copy preferences elements
+  const copyIncludeIndustry = document.getElementById('copyIncludeIndustry');
+  const copyIncludeTechStack = document.getElementById('copyIncludeTechStack');
+  const copyIncludeMatchRate = document.getElementById('copyIncludeMatchRate');
   
   // About Extension functionality
   aboutBtn.addEventListener('click', function() {
@@ -335,21 +339,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     try {
-      // Open each URL in a new tab
-      for (const url of urls) {
-        await chrome.tabs.create({ url: url, active: false });
-        // Small delay to prevent overwhelming the browser
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      
-      showUrlStatus(`Successfully opened ${urls.length} URL(s) in new tabs! Popup will close in 1 second...`, 'success');
-      urlTextarea.value = ''; // Clear the textarea after successful opening
-      
-      // Close the popup after successfully opening URLs
-      setTimeout(() => {
-        window.close();
-      }, 1000); // Small delay to show success message before closing
-      
+      // Delegate URL opening to background service worker so it continues even if popup closes
+      await chrome.runtime.sendMessage({
+        action: 'openUrlsInBackground',
+        urls
+      });
+
+      showUrlStatus(`Opening ${urls.length} URL(s) in background tabs...`, 'success');
+      urlTextarea.value = ''; // Clear after dispatching
+
     } catch (error) {
       console.error('Error opening URLs:', error);
       showUrlStatus('Error opening URLs. Please try again.', 'error');
@@ -370,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
   ];
   
   // Load settings from storage
-  chrome.storage.sync.get(['keywords', 'openaiApiKey', 'jobRadarEnabled'], function(result) {
+  chrome.storage.sync.get(['keywords', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
     let keywords = result.keywords;
     
     // Initialize with default keywords if none exist
@@ -394,7 +392,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update all tabs with the current state
     updateJobRadarState(isEnabled);
+
+    // Initialize copy preferences (defaults false)
+    copyIncludeIndustry.checked = result.copyIncludeIndustry === true;
+    copyIncludeTechStack.checked = result.copyIncludeTechStack === true;
+    copyIncludeMatchRate.checked = result.copyIncludeMatchRate === true;
   });
+
+  // Persist copy preferences
+  function saveCopyPrefs() {
+    chrome.storage.sync.set({
+      copyIncludeIndustry: copyIncludeIndustry.checked,
+      copyIncludeTechStack: copyIncludeTechStack.checked,
+      copyIncludeMatchRate: copyIncludeMatchRate.checked
+    });
+  }
+
+  copyIncludeIndustry && copyIncludeIndustry.addEventListener('change', saveCopyPrefs);
+  copyIncludeTechStack && copyIncludeTechStack.addEventListener('change', saveCopyPrefs);
+  copyIncludeMatchRate && copyIncludeMatchRate.addEventListener('change', saveCopyPrefs);
   
   // API Key management
   saveApiKeyBtn.addEventListener('click', function() {

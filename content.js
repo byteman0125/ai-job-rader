@@ -220,17 +220,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     jobRadarEnabled = request.enabled;
     
     if (jobRadarEnabled) {
-      // Enable Job Radar - create badge if it doesn't exist
-      if (!badge) {
-        createBadge();
+      // Enable Job Radar - ensure badge exists and is visible
+      let existing = document.getElementById('keyword-highlighter-badge');
+      if (!existing) {
+        existing = createBadge();
       }
-      if (badge) {
-        badge.style.display = 'block';
+      if (existing) {
+        existing.style.display = 'block';
       }
     } else {
-      // Disable Job Radar - hide badge
-      if (badge) {
-        badge.style.display = 'none';
+      // Disable Job Radar - hide badge immediately
+      const existing = document.getElementById('keyword-highlighter-badge');
+      if (existing) {
+        existing.style.display = 'none';
       }
     }
   } else if (request.action === 'updateKeywordColor') {
@@ -809,19 +811,27 @@ function initializeHighlighter() {
   // Check if this is a job site
   isJobSite = detectJobSite();
   
-  // Only show badge and extract job info if it's a job site AND Job Radar is enabled
-  if (isJobSite && jobRadarEnabled) {
-    
-    // Extract job information if we have an API key
-    if (openaiApiKey) {
-      startContinuousJobExtraction();
+  // If this is a job site, keep highlighting active regardless of Job Radar toggle
+  if (isJobSite) {
+    // Only show badge and run job extraction when Job Radar is enabled
+    if (jobRadarEnabled) {
+      // Extract job information if we have an API key
+      if (openaiApiKey) {
+        startContinuousJobExtraction();
+      } else {
+      }
+      
+      // Show the badge
+      updateBadge();
     } else {
+      // Hide/remove the badge if it exists when disabled
+      const existingBadge = document.getElementById('keyword-highlighter-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
     }
-    
-    // Show the badge
-    updateBadge();
-    
-    // Initial highlight for existing content
+
+    // Initial highlight for existing content (runs regardless of toggle)
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         setTimeout(highlightKeywords, 1000);
@@ -830,17 +840,14 @@ function initializeHighlighter() {
       setTimeout(highlightKeywords, 1000);
     }
     
-    // Start continuous keyword monitoring
+    // Start continuous keyword monitoring regardless of toggle
     startContinuousKeywordMonitoring();
   } else {
-    
-    // Hide/remove the badge if it exists
+    // Non-job sites: hide/remove the badge if it exists and stop further processing
     const existingBadge = document.getElementById('keyword-highlighter-badge');
     if (existingBadge) {
       existingBadge.remove();
     }
-    
-    // Don't start job extraction or keyword monitoring
     return;
   }
   
@@ -949,7 +956,7 @@ function escapeRegExp(string) {
 // Copy job information to clipboard in tab-separated format
 function copyJobToClipboard() {
   
-  if (!jobInfo || !jobInfo.position || !jobInfo.company) {
+  if (!jobInfo) {
     showCopyError('No job info available');
     return;
   }
@@ -961,22 +968,42 @@ function copyJobToClipboard() {
     // Clean the data to prevent issues with tabs/newlines
     const cleanCompany = jobInfo.company.replace(/[\t\n\r]/g, ' ').trim();
     const cleanPosition = jobInfo.position.replace(/[\t\n\r]/g, ' ').trim();
+    const cleanIndustry = jobInfo.industry.replace(/[\t\n\r]/g, ' ').trim();
     
-    // Create tab-separated string: Company\tPosition\tURL
-    const copyText = `${cleanCompany}\t${cleanPosition}\t${jobUrl}`;
+    // Load copy preferences (defaults: includeIndustry=false, includeTechStack=false, includeMatchRate=false)
+    chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], (prefs) => {
+      const includeIndustry = prefs.copyIncludeIndustry === true;
+      const includeTechStack = prefs.copyIncludeTechStack === true;
+      const includeMatchRate = prefs.copyIncludeMatchRate === true;
+
+      // Build tab-separated fields
+      const fields = [cleanCompany, cleanPosition, jobUrl];
+      if (includeIndustry) {
+        fields.push(cleanIndustry);
+      }
+      if (includeTechStack) {
+        const techStack = Array.isArray(jobInfo.skills) ? jobInfo.skills.join(', ') : '';
+        fields.push(techStack);
+      }
+      if (includeMatchRate) {
+        fields.push(String(jobInfo.matchRate || ''));
+      }
+
+      const copyText = fields.join('\t');
     
     
-    // Try modern clipboard API first
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(copyText).then(() => {
-        showCopySuccess();
-      }).catch(err => {
-        console.error('Modern clipboard API failed:', err);
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(copyText).then(() => {
+          showCopySuccess();
+        }).catch(err => {
+          console.error('Modern clipboard API failed:', err);
+          useFallbackCopy(copyText);
+        });
+      } else {
         useFallbackCopy(copyText);
-      });
-    } else {
-      useFallbackCopy(copyText);
-    }
+      }
+    });
   } catch (error) {
     console.error('Error copying job info:', error);
     showCopyError('Copy failed');
@@ -2616,3 +2643,49 @@ initialStyles.textContent = `
   }
 `;
 document.head.appendChild(initialStyles);
+
+// Hotkey: ALT+X to toggle Job Radar (and badge) globally
+window.addEventListener('keydown', (e) => {
+  try {
+    if (!e.altKey) return;
+    const key = e.key || '';
+    if (key.toLowerCase() !== 'x') return;
+
+    // Avoid triggering while typing in inputs/textareas/contentEditable
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) {
+      return;
+    }
+
+    // Only act on job sites
+    if (!isJobSite) return;
+
+    // Flip global Job Radar enabled state and broadcast
+    const newEnabled = !jobRadarEnabled;
+    chrome.storage.sync.set({ jobRadarEnabled: newEnabled }, () => {
+      chrome.runtime.sendMessage({
+        action: 'updateJobRadarState',
+        enabled: newEnabled
+      }).catch(() => {});
+    });
+
+    // Locally apply the same effect immediately
+    jobRadarEnabled = newEnabled;
+    if (jobRadarEnabled) {
+      let existing = document.getElementById('keyword-highlighter-badge');
+      if (!existing) {
+        existing = createBadge();
+      }
+      if (existing) {
+        existing.style.display = 'block';
+        updateBadge();
+      }
+    } else {
+      const existing = document.getElementById('keyword-highlighter-badge');
+      if (existing) {
+        existing.style.display = 'none';
+      }
+    }
+  } catch (_) {
+  }
+});
