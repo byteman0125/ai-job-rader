@@ -10,7 +10,11 @@ let dragOffset = { x: 0, y: 0 };
 // Job information extraction
 let jobInfo = null;
 let isJobSite = false;
-let openaiApiKey = null;
+let aiProvider = 'openai';
+let openaiKeys = [];
+let geminiKeys = [];
+let selectedOpenaiKey = null;
+let selectedGeminiKey = null;
 let loadAttempts = 0;
 let maxLoadAttempts = 3;
 let loadFailed = false;
@@ -135,7 +139,7 @@ const defaultKeywords = [
 ];
 
 // Load settings from storage including badge position
-chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey', 'userLocation', 'workExperience'], (result) => {
+chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'userLocation', 'workExperience'], (result) => {
 
   if (result.keywords && result.keywords.length > 0) {
     keywords = result.keywords;
@@ -145,9 +149,34 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'openaiApiKey', 'userLocat
     chrome.storage.sync.set({ keywords: defaultKeywords });
   }
 
-  // Load saved API key
-  if (result.openaiApiKey) {
-    openaiApiKey = result.openaiApiKey;
+  // Load AI settings
+  aiProvider = result.aiProvider || 'openai';
+  openaiKeys = result.openaiKeys || [];
+  geminiKeys = result.geminiKeys || [];
+  selectedOpenaiKey = result.selectedOpenaiKey || null;
+  selectedGeminiKey = result.selectedGeminiKey || null;
+  
+  // Migration: Handle old single API key format
+  if (result.openaiApiKey && openaiKeys.length === 0) {
+    // The popup will handle the migration, just use the old key temporarily
+    console.log('Using old OpenAI API key temporarily until migration completes...');
+    const keyId = 'migrated_' + Date.now().toString();
+    const keyData = {
+      id: keyId,
+      key: result.openaiApiKey,
+      masked: result.openaiApiKey.substring(0, 12) + '••••••••••••••••••••',
+      status: 'unknown',
+      addedAt: new Date().toISOString(),
+      usage: {
+        requestsToday: 0,
+        tokensToday: 0,
+        lastReset: new Date().toDateString(),
+        rateLimitReset: null,
+        isRateLimited: false
+      }
+    };
+    openaiKeys.push(keyData);
+    selectedOpenaiKey = keyId;
   }
   
   // Load user profile data
@@ -179,6 +208,23 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       initializeHighlighter();
     }
     
+    // Listen for AI settings changes
+    if (changes.aiProvider) {
+      aiProvider = changes.aiProvider.newValue || 'openai';
+    }
+    if (changes.openaiKeys) {
+      openaiKeys = changes.openaiKeys.newValue || [];
+    }
+    if (changes.geminiKeys) {
+      geminiKeys = changes.geminiKeys.newValue || [];
+    }
+    if (changes.selectedOpenaiKey) {
+      selectedOpenaiKey = changes.selectedOpenaiKey.newValue || null;
+    }
+    if (changes.selectedGeminiKey) {
+      selectedGeminiKey = changes.selectedGeminiKey.newValue || null;
+    }
+    
     // Listen for profile changes to update cover letter section in real-time
     if (changes.userWorkExperience || changes.userLocation) {
       if (changes.userWorkExperience) {
@@ -208,14 +254,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     sendResponse({ totalMatches: totalMatches });
-  } else if (request.action === 'updateApiKey') {
-    // Update API key from popup
-    openaiApiKey = request.apiKey;
-    
-    // If this is a job site and we now have an API key, try to extract job info
-    if (isJobSite && openaiApiKey) {
-      setTimeout(extractJobInfo, 1000);
-    }
+
   } else if (request.action === 'updateJobRadarState') {
     jobRadarEnabled = request.enabled;
     
@@ -291,9 +330,18 @@ function retryJobExtraction() {
 
 // Manual job info extraction
 function manualExtractJobInfo() {
+  // Check if we have a valid API key for the current provider
+  let hasValidApiKey = false;
+  if (aiProvider === 'openai' && selectedOpenaiKey) {
+    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+    hasValidApiKey = key && key.status === 'valid';
+  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+    hasValidApiKey = key && key.status === 'valid';
+  }
   
-  if (!openaiApiKey) {
-    alert('Please configure your OpenAI API key in the extension popup first.');
+  if (!hasValidApiKey) {
+    alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
     return;
   }
     
@@ -355,19 +403,27 @@ function updateExtractionProgress() {
   }
 }
 
-// Start continuous job extraction every 4 seconds for up to 30 seconds
+// Start continuous job extraction with smart delay system
 function startContinuousJobExtraction() {
+  console.log(`🚀 Starting continuous job extraction at ${new Date().toLocaleTimeString()}`);
   
   let attempts = 0;
-  const maxAttempts = 8; // 30 seconds / 4 seconds = 7.5, so 8 attempts
-  const interval = 4000; // 4 seconds
+  // Adjust interval based on provider to respect rate limits
+  const interval = aiProvider === 'gemini' ? 6000 : 4000; // 6 seconds for Gemini (RPM limit), 4 seconds for OpenAI
+  const maxAttempts = aiProvider === 'gemini' ? 5 : 8; // Fewer attempts for Gemini due to longer interval
     
     // Clear any existing interval to prevent multiple intervals
     if (window.extractionInterval) {
+      console.log('🔄 Clearing existing extraction interval');
       clearInterval(window.extractionInterval);
     }
   
-  const extractionInterval = setInterval(() => {
+  // Calculate smart delay for multiple job pages
+  const smartDelay = calculateSmartDelay();
+  console.log(`⏰ Smart delay calculated: ${smartDelay}ms`);
+  
+  // Function to run extraction attempt
+  const runExtractionAttempt = () => {
     attempts++;
     
     // Update badge to show progress
@@ -397,12 +453,51 @@ function startContinuousJobExtraction() {
       
       updateBadge();
     }
-  }, interval);
+  };
   
-  // Also try immediate extraction
+  // Start with smart delay instead of immediate attempt
   setTimeout(() => {
-    extractJobInfo();
-  }, 1000);
+    runExtractionAttempt();
+    
+    // Then continue with interval-based attempts
+    const extractionInterval = setInterval(runExtractionAttempt, interval);
+    
+    // Store the interval reference globally to prevent multiple intervals
+    window.extractionInterval = extractionInterval;
+  }, smartDelay);
+}
+
+// Calculate smart delay based on number of keys and estimated job pages
+function calculateSmartDelay() {
+  if (aiProvider !== 'gemini') {
+    // For OpenAI, use minimal delay (2 seconds)
+    return 2000;
+  }
+  
+  const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
+  
+  if (geminiKeyCount <= 1) {
+    // Single key, use standard delay
+    return 3000;
+  }
+  
+  // Estimate number of job pages user might open
+  // Assume user might open 10-60 job pages
+  const estimatedJobPages = 30; // Conservative estimate
+  
+  // Calculate delay: 60 seconds / estimated pages / number of keys
+  // This ensures keys are distributed across time
+  const totalDelaySeconds = 60;
+  const delayPerPage = (totalDelaySeconds * 1000) / estimatedJobPages;
+  const delayPerKey = delayPerPage / geminiKeyCount;
+  
+  // Add some randomization to prevent all pages from syncing
+  const randomFactor = 0.5 + Math.random(); // 0.5 to 1.5
+  const finalDelay = Math.max(1000, delayPerKey * randomFactor); // Minimum 1 second
+  
+  console.log(`📊 Smart delay calculation: ${geminiKeyCount} keys, ~${estimatedJobPages} pages, ${finalDelay.toFixed(0)}ms delay`);
+  
+  return Math.round(finalDelay);
 }
 
 // Start continuous keyword monitoring every 2 seconds for up to 30 seconds
@@ -504,9 +599,344 @@ function detectJobSite() {
   return isJobSite;
 }
 
-// Extract job information using GPT-4 Turbo
+// Extract job information using AI
+async function getAvailableApiKey() {
+  const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+  
+  if (aiProvider === 'openai') {
+    // For OpenAI: Use the selected key (no auto-rotation needed)
+    const selectedKey = keys.find(key => key.id === selectedOpenaiKey);
+    
+    if (selectedKey && selectedKey.status === 'valid') {
+      console.log(`Using selected OpenAI key: ${selectedKey.masked}`);
+      return selectedKey;
+    }
+    
+    // If selected key is not valid, try to find any valid key
+    const availableKeys = keys.filter(key => key.status === 'valid');
+    if (availableKeys.length > 0) {
+      console.log(`Selected key invalid, using first available OpenAI key: ${availableKeys[0].masked}`);
+      return availableKeys[0];
+    }
+    
+    return null;
+  } else {
+    // For Gemini: Smart key distribution based on page URL
+    const availableKeys = keys.filter(key => 
+      key.status === 'valid' && 
+      !key.usage?.isRateLimited &&
+      (key.usage?.requestsToday || 0) < 250 && (key.usage?.tokensToday || 0) < 250000
+    );
+    
+    if (availableKeys.length === 0) {
+      return null;
+    }
+    
+    // Use page-based key distribution for multiple job pages
+    const assignedKey = getPageAssignedKey(availableKeys);
+    
+    if (assignedKey) {
+      console.log(`🎯 Using page-assigned Gemini key: ${assignedKey.masked} (${assignedKey.usage?.requestsToday || 0}/250 requests today)`);
+      return assignedKey;
+    }
+    
+    // Fallback to least usage if no page assignment
+    const keyWithLeastUsage = availableKeys.reduce((least, current) => {
+      const leastUsage = least.usage?.requestsToday || 0;
+      const currentUsage = current.usage?.requestsToday || 0;
+      return currentUsage < leastUsage ? current : least;
+    });
+    
+    console.log(`🔄 Fallback to Gemini key with least usage: ${keyWithLeastUsage.masked} (${keyWithLeastUsage.usage?.requestsToday || 0}/250 requests today)`);
+    return keyWithLeastUsage;
+  }
+}
+
+// Assign specific keys to specific pages for load distribution
+function getPageAssignedKey(availableKeys) {
+  if (availableKeys.length <= 1) {
+    return availableKeys[0];
+  }
+  
+  // Use URL hash to consistently assign the same key to the same page
+  const currentUrl = window.location.href;
+  const urlHash = hashString(currentUrl);
+  
+  // Convert hash to index (0 to availableKeys.length-1)
+  const keyIndex = urlHash % availableKeys.length;
+  const assignedKey = availableKeys[keyIndex];
+  
+  console.log(`🔑 Page assignment: URL hash ${urlHash} → Key index ${keyIndex} → ${assignedKey.masked}`);
+  
+  return assignedKey;
+}
+
+// Simple hash function for URL-based key assignment
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash);
+}
+
+// URL opening timing control system
+let urlOpeningTracker = {
+  lastUrlOpenTime: 0,
+  urlOpenCount: 0,
+  suggestedDelay: 0,
+  isTracking: false,
+  isDelaying: false,
+  pendingDelays: []
+};
+
+// Initialize URL opening tracking
+function initializeUrlOpeningTracker() {
+  // Listen for page load events to track URL openings
+  window.addEventListener('load', () => {
+    trackUrlOpening();
+  });
+  
+  // Also track when the script loads (for direct navigation)
+  setTimeout(() => {
+    trackUrlOpening();
+  }, 1000);
+  
+  // Add more aggressive tracking for rapid page loads
+  let pageLoadCount = 0;
+  let lastPageLoadTime = 0;
+  
+  // Store original function reference
+  const originalStartContinuousJobExtraction = startContinuousJobExtraction;
+  
+  // Override the startContinuousJobExtraction to add delays
+  window.startContinuousJobExtraction = function() {
+    // Check if we need to delay before starting extraction
+    const currentTime = Date.now();
+    const timeSinceLastLoad = currentTime - lastPageLoadTime;
+    const suggestedDelay = calculateSuggestedUrlDelay();
+    
+    if (pageLoadCount > 0 && timeSinceLastLoad < suggestedDelay) {
+      const requiredDelay = suggestedDelay - timeSinceLastLoad;
+      console.log(`🚫 Page load too fast! Delaying job extraction by ${requiredDelay}ms`);
+      
+      // Show delay in badge
+      updateBadge(`Delaying ${Math.round(requiredDelay/1000)}s`, '#ff6b6b');
+      
+      // Delay the actual job extraction
+      setTimeout(() => {
+        console.log(`✅ Delay completed, starting job extraction`);
+        updateBadge();
+        originalStartContinuousJobExtraction.call(this);
+      }, requiredDelay);
+      
+      return;
+    }
+    
+    // Update tracking
+    pageLoadCount++;
+    lastPageLoadTime = currentTime;
+    
+    // Start extraction normally
+    originalStartContinuousJobExtraction.call(this);
+  };
+}
+
+// Track when a job URL is opened
+function trackUrlOpening() {
+  if (!isJobSite) return;
+  
+  const currentTime = Date.now();
+  const timeSinceLastOpen = currentTime - urlOpeningTracker.lastUrlOpenTime;
+  
+  urlOpeningTracker.urlOpenCount++;
+  urlOpeningTracker.lastUrlOpenTime = currentTime;
+  
+  // Calculate suggested delay for next URL opening
+  const suggestedDelay = calculateSuggestedUrlDelay();
+  urlOpeningTracker.suggestedDelay = suggestedDelay;
+  
+  console.log(`🌐 URL Opening #${urlOpeningTracker.urlOpenCount} tracked`);
+  console.log(`⏱️ Time since last open: ${timeSinceLastOpen}ms`);
+  console.log(`💡 Suggested delay for next URL: ${suggestedDelay}ms`);
+  
+  // Enforce actual delay if opening too fast
+  if (timeSinceLastOpen < suggestedDelay && urlOpeningTracker.urlOpenCount > 1) {
+    const requiredDelay = suggestedDelay - timeSinceLastOpen;
+    console.log(`⏳ Enforcing delay: ${requiredDelay}ms before processing this page`);
+    enforceUrlDelay(requiredDelay);
+  }
+}
+
+// Enforce actual delay before processing job extraction
+function enforceUrlDelay(delayMs) {
+  if (urlOpeningTracker.isDelaying) {
+    console.log(`⏸️ Already delaying, adding to queue`);
+    urlOpeningTracker.pendingDelays.push(delayMs);
+    return;
+  }
+  
+  urlOpeningTracker.isDelaying = true;
+  updateBadge(`Waiting ${Math.round(delayMs/1000)}s`, '#ffa500');
+  
+  console.log(`⏳ Enforcing ${delayMs}ms delay before job extraction`);
+  
+  setTimeout(() => {
+    urlOpeningTracker.isDelaying = false;
+    updateBadge();
+    
+    // Process any pending delays
+    if (urlOpeningTracker.pendingDelays.length > 0) {
+      const nextDelay = urlOpeningTracker.pendingDelays.shift();
+      console.log(`⏳ Processing pending delay: ${nextDelay}ms`);
+      enforceUrlDelay(nextDelay);
+    }
+    
+    // Now allow job extraction to proceed
+    console.log(`✅ Delay completed, job extraction can proceed`);
+  }, delayMs);
+}
+
+// Calculate suggested delay between opening URLs
+function calculateSuggestedUrlDelay() {
+  if (aiProvider !== 'gemini') {
+    return 1000; // 1 second for OpenAI
+  }
+  
+  const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
+  
+  if (geminiKeyCount <= 1) {
+    return 6000; // 6 seconds for single key
+  }
+  
+  // Estimate user might open 30-60 job pages
+  const estimatedPages = 45;
+  
+  // Calculate optimal delay: 60 seconds / estimated pages
+  const totalTimeSeconds = 60;
+  const delayPerPage = (totalTimeSeconds * 1000) / estimatedPages;
+  
+  // Adjust based on number of keys (more keys = can open faster)
+  const adjustedDelay = delayPerPage / Math.sqrt(geminiKeyCount);
+  
+  // Minimum 1 second, maximum 10 seconds
+  const finalDelay = Math.max(1000, Math.min(10000, adjustedDelay));
+  
+  console.log(`📊 URL delay calculation: ${geminiKeyCount} keys, ~${estimatedPages} pages, ${finalDelay.toFixed(0)}ms delay`);
+  
+  return Math.round(finalDelay);
+}
+
+// Show timing suggestion in badge
+function showUrlTimingSuggestion() {
+  const suggestedDelaySeconds = Math.round(urlOpeningTracker.suggestedDelay / 1000);
+  updateBadge(`Wait ${suggestedDelaySeconds}s`, '#ffa500');
+  
+  // Clear suggestion after delay
+  setTimeout(() => {
+    if (jobInfo && jobInfo.position) {
+      updateBadge();
+    }
+  }, 3000);
+}
+
+// Get timing information for user
+function getUrlTimingInfo() {
+  const suggestedDelaySeconds = Math.round(urlOpeningTracker.suggestedDelay / 1000);
+  const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
+  
+  return {
+    suggestedDelay: suggestedDelaySeconds,
+    keyCount: geminiKeyCount,
+    urlCount: urlOpeningTracker.urlOpenCount,
+    canOpenFaster: geminiKeyCount > 1
+  };
+}
+
+async function updateKeyUsage(keyId, tokensUsed = 0) {
+  const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+  const key = keys.find(k => k.id === keyId);
+  
+  if (key) {
+    if (!key.usage) {
+      key.usage = {
+        requestsToday: 0,
+        tokensToday: 0,
+        lastReset: new Date().toDateString(),
+        rateLimitReset: null,
+        isRateLimited: false
+      };
+    }
+    
+    // Reset daily counters if it's a new day
+    const today = new Date().toDateString();
+    if (key.usage.lastReset !== today) {
+      key.usage.requestsToday = 0;
+      key.usage.tokensToday = 0;
+      key.usage.lastReset = today;
+      key.usage.isRateLimited = false;
+    }
+    
+    key.usage.requestsToday += 1;
+    key.usage.tokensToday += tokensUsed;
+    
+    // Calculate cost for OpenAI (GPT-4 pricing: $0.03/1K input tokens, $0.06/1K output tokens)
+    if (aiProvider === 'openai' && tokensUsed > 0) {
+      // Estimate: assume 70% input tokens, 30% output tokens for job extraction
+      const inputTokens = Math.round(tokensUsed * 0.7);
+      const outputTokens = Math.round(tokensUsed * 0.3);
+      const inputCost = (inputTokens / 1000) * 0.03;
+      const outputCost = (outputTokens / 1000) * 0.06;
+      const requestCost = inputCost + outputCost;
+      
+      key.usage.costToday = (key.usage.costToday || 0) + requestCost;
+      console.log(`💰 Cost for this request: $${requestCost.toFixed(4)} (Total today: $${key.usage.costToday.toFixed(4)})`);
+    }
+    
+        // Check if key is approaching limits (only for Gemini)
+    if (aiProvider === 'gemini') {
+      const maxRequests = 250;
+      const maxTokens = 250000;
+
+      if (key.usage.requestsToday >= maxRequests || key.usage.tokensToday >= maxTokens) {
+        key.usage.isRateLimited = true;
+        key.usage.rateLimitReset = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        console.log(`🚫 Gemini key ${key.masked} reached daily limits and marked as rate limited`);
+      }
+    }
+    
+    // Save updated usage to storage
+    chrome.storage.sync.set({
+      [aiProvider === 'openai' ? 'openaiKeys' : 'geminiKeys']: keys
+    });
+  }
+}
+
 async function extractJobInfo() {
-  if (!isJobSite || !openaiApiKey) {
+  if (!isJobSite) {
+    return;
+  }
+  
+  // Check if we're in a delay period
+  if (urlOpeningTracker.isDelaying) {
+    console.log(`⏸️ Job extraction blocked - waiting for URL delay to complete`);
+    return;
+  }
+  
+  // Get an available API key (not rate limited)
+  let currentApiKey = null;
+  let currentKeyId = null;
+  
+  const availableKey = await getAvailableApiKey();
+  if (availableKey) {
+    currentApiKey = availableKey.key;
+    currentKeyId = availableKey.id;
+    console.log(`Using available key: ${availableKey.masked}`);
+  } else {
+    console.log('All API keys are rate limited or exhausted');
+    updateBadge('All keys limited', '#ff6b6b');
     return;
   }
   
@@ -519,7 +949,36 @@ async function extractJobInfo() {
   
   // Set request lock
   isRequestInProgress = true;
-  console.log(`🔒 Starting job extraction attempt ${loadAttempts + 1}/${maxLoadAttempts}`);
+  console.log(`🔒 Starting job extraction attempt ${loadAttempts}/${maxLoadAttempts} at ${new Date().toLocaleTimeString()}`);
+  
+      // Check RPM limit for Gemini only (OpenAI has no RPM limits)
+    if (aiProvider === 'gemini') {
+      const keys = geminiKeys;
+      const key = keys.find(k => k.id === currentKeyId);
+      if (key) {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000; // 60 seconds
+        
+        // Initialize requestsInLastMinute if not exists
+        if (!key.usage.requestsInLastMinute) {
+          key.usage.requestsInLastMinute = [];
+        }
+        
+        // Remove requests older than 1 minute
+        key.usage.requestsInLastMinute = key.usage.requestsInLastMinute.filter(timestamp => timestamp > oneMinuteAgo);
+        
+        // Check if we've hit the RPM limit
+        if (key.usage.requestsInLastMinute.length >= 10) {
+          console.log('🚫 Gemini RPM limit reached (10 requests/minute), waiting...');
+          isRequestInProgress = false;
+          updateBadge('RPM limit reached', '#ff6b6b');
+          return;
+        }
+        
+        // Add current request timestamp
+        key.usage.requestsInLastMinute.push(now);
+      }
+    }
   
   loadAttempts++;
 
@@ -550,17 +1009,19 @@ async function extractJobInfo() {
        console.log('⏰ Request timeout - aborting');
      }, 15000); // 15 second timeout
     
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{
-          role: 'system',
-          content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
+    let response;
+    if (aiProvider === 'openai') {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{
+            role: 'system',
+            content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
 
 "position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
 - PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
@@ -623,27 +1084,131 @@ The HTML structure will help you identify the main job title and company name mo
 Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
 
 CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".`
-        }, {
-          role: 'user',
-          content: `Job Posting Content:
+          }, {
+            role: 'user',
+            content: `Job Posting Content:
 ${pageContent}
 
 User Work Experience:
 ${userWorkExperience || 'No work experience provided'}
 
 User Location: ${userLocation || 'Not specified'}`
-        }],
-        max_tokens: 1000,
-        temperature: 0.1
-      }),
-      signal: controller.signal
-    });
+          }],
+          max_tokens: 1000,
+          temperature: 0.1
+        }),
+        signal: controller.signal
+      });
+    } else {
+      // Gemini API call
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
+
+"position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
+- PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
+- H1 tags typically contain the main job title (e.g., "Senior Software Engineer")
+- Do NOT modify, shorten, or customize the title in any way
+
+"company": The hiring company name (e.g., "Metronome", "Axuall", "Jumpapp.com", "AutoAssist", "Samsara", "Maple", "KeyBank", "Immuta", "Staff4Me"). Look for company names in page titles, headers, logos, "About" sections, or company descriptions. IMPORTANT: Check the page title first - if it contains both job title and company name (e.g., "Senior Software Engineer - Staff4Me"), extract the company name part. Also look for company names in H1, H2, H3 elements and header areas. If company name is not clearly identifiable, use empty string "".
+
+"jobType": Analyze work arrangement from FULL CONTENT:
+
+**SEMANTIC ANALYSIS**: Look for work arrangement patterns, location requirements, and physical presence needs.
+
+**"Remote"** = Work from anywhere with no physical office presence required:
+- Job explicitly states "remote", "work from anywhere", "distributed team"
+- No mention of office visits, commute, or physical presence
+- May have geographic restrictions (US only, Canada only, etc.) but still fully remote
+- **NO relocation requirements** - candidates can work from their current location
+- Examples: "remote within US", "work from anywhere in Canada", "fully distributed team"
+
+**"Hybrid"** = Requires some physical office presence:
+- Job mentions hybrid schedules, office visits, or commute requirements
+- Requires living near specific office locations
+- Mix of remote and in-office work
+- **May require relocation** to specific states/regions
+- Examples: "hybrid schedule", "2 days in office", "must be near our office", "willing to relocate"
+
+**"On-site"** = Requires physical office presence:
+- Job requires relocation or living in specific city
+- No remote work options mentioned
+- Must commute to office location
+- **Definitely requires relocation** to specific location
+
+**Use "Remote" for jobs that are fully remote even if they have geographic restrictions (like US/Canada only).**
+
+Use "" if unclear or insufficient information.
+
+"industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
+"skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
+"matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
+
+1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
+2. **Frameworks & Libraries**: Django, React, Spring Boot, Node.js, etc.
+3. **Databases**: PostgreSQL, MongoDB, Redis, Elasticsearch, etc.
+4. **Cloud & DevOps**: AWS, Docker, Kubernetes, Terraform, CI/CD tools
+5. **Tools & Technologies**: Git, REST APIs, microservices, etc.
+
+**Scoring Breakdown:**
+- 90-100%: Excellent tech stack match (most skills align)
+- 70-89%: Good tech stack match (many skills align)
+- 50-69%: Moderate tech stack match (some skills align)
+- 30-49%: Poor tech stack match (few skills align)
+- 0-29%: Very poor tech stack match (minimal skills align)
+
+**Focus on technical skills overlap, NOT years of experience or general qualifications.**
+
+Return only the percentage number (e.g., 85) without any text or symbols.
+
+The HTML structure will help you identify the main job title and company name more accurately.
+
+Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
+
+CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".
+
+Job Posting Content:
+${pageContent}
+
+User Work Experience:
+${userWorkExperience || 'No work experience provided'}
+
+User Location: ${userLocation || 'Not specified'}`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1000
+          }
+        }),
+        signal: controller.signal
+      });
+    }
     
     clearTimeout(timeoutId); // Clear timeout if successful
     
     if (response.ok) {
       const data = await response.json();
-      const content = data.choices[0].message.content;
+      let content;
+      
+      // Update usage tracking
+      const tokensUsed = aiProvider === 'openai' ? 
+        (data.usage?.total_tokens || 0) : 
+        (data.usageMetadata?.totalTokenCount || 0);
+      await updateKeyUsage(currentKeyId, tokensUsed);
+      
+      if (aiProvider === 'openai') {
+        content = data.choices[0].message.content;
+      } else {
+        // Gemini response format
+        content = data.candidates[0].content.parts[0].text;
+      }
 
       
       try {
@@ -728,8 +1293,33 @@ User Location: ${userLocation || 'Not specified'}`
     } else {
       // API request failed
       const errorText = await response.text();
+      
+      // Handle rate limiting (only for Gemini)
+      if (response.status === 429 && aiProvider === 'gemini') {
+        console.log('Gemini rate limit hit, marking key as limited and trying another key...');
+        const key = geminiKeys.find(k => k.id === currentKeyId);
+        if (key) {
+          key.usage = key.usage || {};
+          key.usage.isRateLimited = true;
+          key.usage.rateLimitReset = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+          
+          // Save updated key status
+          chrome.storage.sync.set({
+            geminiKeys: geminiKeys
+          });
+          
+          // Try with another available key
+          const nextKey = await getAvailableApiKey();
+          if (nextKey) {
+            console.log(`Retrying with next available Gemini key: ${nextKey.masked}`);
+            // Recursive call with new key
+            return await extractJobInfo();
+          }
+        }
+      }
+      
       lastLoadError = `API Error: ${response.status} - ${errorText}`;
-        updateBadge();
+      updateBadge();
     }
   } catch (error) {
       // Handle network or other errors
@@ -811,25 +1401,39 @@ function initializeHighlighter() {
   // Check if this is a job site
   isJobSite = detectJobSite();
   
-  // If this is a job site, keep highlighting active regardless of Job Radar toggle
+  // Initialize URL opening tracker for job sites
   if (isJobSite) {
-    // Only show badge and run job extraction when Job Radar is enabled
-    if (jobRadarEnabled) {
-      // Extract job information if we have an API key
-      if (openaiApiKey) {
-        startContinuousJobExtraction();
+    initializeUrlOpeningTracker();
+  }
+  
+      // If this is a job site, keep highlighting active regardless of Job Radar toggle
+    if (isJobSite) {
+      // Only show badge and run job extraction when Job Radar is enabled
+      if (jobRadarEnabled) {
+        // Check if we have a valid API key for the current provider
+        let hasValidApiKey = false;
+        if (aiProvider === 'openai' && selectedOpenaiKey) {
+          const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+          hasValidApiKey = key && key.status === 'valid';
+        } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+          const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+          hasValidApiKey = key && key.status === 'valid';
+        }
+        
+        // Extract job information if we have a valid API key
+        if (hasValidApiKey) {
+          startContinuousJobExtraction();
+        }
+        
+        // Show the badge
+        updateBadge();
       } else {
+        // Hide/remove the badge if it exists when disabled
+        const existingBadge = document.getElementById('keyword-highlighter-badge');
+        if (existingBadge) {
+          existingBadge.remove();
+        }
       }
-      
-      // Show the badge
-      updateBadge();
-    } else {
-      // Hide/remove the badge if it exists when disabled
-      const existingBadge = document.getElementById('keyword-highlighter-badge');
-      if (existingBadge) {
-        existingBadge.remove();
-      }
-    }
 
     // Initial highlight for existing content (runs regardless of toggle)
     if (document.readyState === 'loading') {
@@ -1099,8 +1703,21 @@ async function generateCoverLetter() {
     return;
   }
   
-  if (!openaiApiKey) {
-    alert('Please configure your OpenAI API key in the extension popup first.');
+  // Check if we have a valid API key for the current provider
+  let hasValidApiKey = false;
+  let currentApiKey = null;
+  if (aiProvider === 'openai' && selectedOpenaiKey) {
+    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+    hasValidApiKey = key && key.status === 'valid';
+    currentApiKey = key ? key.key : null;
+  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+    hasValidApiKey = key && key.status === 'valid';
+    currentApiKey = key ? key.key : null;
+  }
+  
+  if (!hasValidApiKey || !currentApiKey) {
+    alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
     return;
   }
   
@@ -1140,23 +1757,58 @@ Return only the cover letter text without any formatting or additional text.`
       }
     ];
     
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: messages,
-        max_tokens: 800,
-        temperature: 0.7
-      })
-    });
+    let response;
+    if (aiProvider === 'openai') {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: messages,
+          max_tokens: 800,
+          temperature: 0.7
+        })
+      });
+    } else {
+      // Gemini API call for cover letter generation
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: messages[0].content
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 800
+          }
+        })
+      });
+    }
     
     if (response.ok) {
       const data = await response.json();
-      const coverLetter = data.choices[0].message.content.trim();
+      let coverLetter;
+      
+      // Update usage tracking
+      const tokensUsed = aiProvider === 'openai' ? 
+        (data.usage?.total_tokens || 0) : 
+        (data.usageMetadata?.totalTokenCount || 0);
+      await updateKeyUsage(currentKeyId, tokensUsed);
+      
+      if (aiProvider === 'openai') {
+        coverLetter = data.choices[0].message.content.trim();
+      } else {
+        // Gemini response format
+        coverLetter = data.candidates[0].content.parts[0].text.trim();
+      }
       
       // Display the generated cover letter
       coverLetterContent.textContent = coverLetter;
@@ -1499,6 +2151,16 @@ function updateBadge() {
   // Recalculate total counts from actual DOM (excluding badge area)
   recalculateCountsFromDOM();
 
+  // Check if we have a valid API key for the current provider
+  let hasValidApiKey = false;
+  if (aiProvider === 'openai' && selectedOpenaiKey) {
+    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+    hasValidApiKey = key && key.status === 'valid';
+  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+    hasValidApiKey = key && key.status === 'valid';
+  }
+
   let content = '';
 
   // Check if badge is hidden (closed)
@@ -1630,10 +2292,10 @@ function updateBadge() {
               <span class="status-label">Site:</span>
               <span class="status-value">${isJobSite ? 'Job Site' : 'Not Job Site'}</span>
             </div>
-            <div class="status-item ${openaiApiKey ? 'success' : 'error'}">
-              <span class="status-icon">${openaiApiKey ? '✅' : '❌'}</span>
+            <div class="status-item ${hasValidApiKey ? 'success' : 'error'}">
+              <span class="status-icon">${hasValidApiKey ? '✅' : '❌'}</span>
               <span class="status-label">API Key:</span>
-              <span class="status-value">${openaiApiKey ? 'Available' : 'Missing'}</span>
+              <span class="status-value">${hasValidApiKey ? `${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} Available` : 'Missing'}</span>
             </div>
             <div class="status-item ${jobInfo ? 'success' : 'pending'}">
               <span class="status-icon">${jobInfo ? '✅' : '⏳'}</span>
@@ -1742,8 +2404,20 @@ function updateBadge() {
             }
             
             // Restart job extraction
-            if (isJobSite && openaiApiKey) {
-              startContinuousJobExtraction();
+            if (isJobSite) {
+              // Check if we have a valid API key for the current provider
+              let hasValidApiKey = false;
+              if (aiProvider === 'openai' && selectedOpenaiKey) {
+                const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+                hasValidApiKey = key && key.status === 'valid';
+              } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+                const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+                hasValidApiKey = key && key.status === 'valid';
+              }
+              
+              if (hasValidApiKey) {
+                startContinuousJobExtraction();
+              }
             }
             
             // Update badge to show active state

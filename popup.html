@@ -409,10 +409,12 @@
       transition: all 0.3s ease;
       background: white;
       font-family: monospace;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
+      resize: vertical;
+      min-height: 36px;
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
     }
     
     .api-key-input:focus {
@@ -923,6 +925,357 @@
     .header input:checked + .slider {
       background: rgba(255, 255, 255, 0.9);
     }
+    
+    /* AI Settings Tab Styles */
+    .provider-selection {
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+    }
+    
+    .provider-option {
+      cursor: pointer;
+      display: block;
+    }
+    
+    .provider-option input[type="radio"] {
+      display: none;
+    }
+    
+    .provider-card {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .provider-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+      transition: left 0.5s ease;
+    }
+    
+    .provider-card:hover::before {
+      left: 100%;
+    }
+    
+    .provider-option input[type="radio"]:checked + .provider-card {
+      border-color: #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    }
+    
+    .provider-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: #374151;
+      margin-bottom: 2px;
+      line-height: 1.2;
+    }
+    
+    .provider-subtitle {
+      font-size: 11px;
+      color: #6b7280;
+      font-style: italic;
+      line-height: 1.2;
+    }
+    
+    .api-keys-container {
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      padding: 8px;
+      margin-bottom: 12px;
+      min-height: 60px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .api-keys-container::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    .api-keys-container::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 2px;
+    }
+    
+    .api-keys-container::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 2px;
+    }
+    
+    .api-keys-container::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    
+    .api-key-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s ease;
+      min-height: 48px;
+    }
+    
+    .api-key-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .api-key-item:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .api-key-item.selected {
+      border-color: #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    }
+    
+    .api-key-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .api-key-masked {
+      font-family: monospace;
+      font-size: 13px;
+      color: #374151;
+      font-weight: 500;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .api-key-status {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    
+    .api-key-status.valid {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .api-key-status.invalid {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .api-key-status.unknown {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    
+    .api-key-status.rate-limited {
+      background: #fef3c7;
+      color: #d97706;
+    }
+    
+    .api-key-usage {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 4px;
+      font-size: 10px;
+    }
+    
+    .usage-item {
+      color: #6b7280;
+      font-weight: 500;
+    }
+    
+    .usage-item.fresh-key {
+      color: #10b981;
+      font-weight: 600;
+    }
+    
+    .usage-item.cost-item {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+    
+    .add-key-help {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .add-key-help p {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    .add-key-help ul {
+      margin: 0;
+      padding-left: 16px;
+    }
+    
+    .add-key-help li {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    
+    .add-key-help a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    
+    .add-key-help a:hover {
+      text-decoration: underline;
+    }
+    
+    .api-key-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    
+    .api-key-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+    }
+    
+    .api-key-btn.select {
+      color: #667eea;
+    }
+    
+    .api-key-btn.select:hover {
+      background: rgba(102, 126, 234, 0.1);
+      transform: scale(1.1);
+    }
+    
+    .api-key-btn.delete {
+      color: #e53e3e;
+    }
+    
+    .api-key-btn.delete:hover {
+      background: rgba(229, 62, 62, 0.1);
+      transform: scale(1.1);
+    }
+    
+    .add-key-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .add-key-btn {
+      background: linear-gradient(135deg, #48BB78 0%, #38A169 100%);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    
+    .add-key-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    }
+    
+    .add-key-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .api-stats {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .stat-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .stat-label {
+      font-weight: 500;
+      color: #374151;
+      font-size: 13px;
+    }
+    
+    .stat-value {
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #718096;
+      padding: 16px 12px;
+      font-style: italic;
+      font-size: 13px;
+    }
+    
+    .empty-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    
+    .empty-text {
+      color: #9ca3af;
+    }
+    
+    .empty-subtext {
+      color: #9ca3af;
+      font-size: 10px;
+      margin-top: 2px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -944,6 +1297,9 @@
     <div class="tabs">
       <div class="tab active" data-tab="url-opener">
         <span>URL Open & AI</span>
+      </div>
+      <div class="tab" data-tab="ai-settings">
+        <span>🤖 AI Settings</span>
       </div>
       <div class="tab" data-tab="profile">
         <span>👤 Profile</span>
@@ -1009,6 +1365,91 @@
       </div>
     </div>
     
+    <div class="tab-content" id="ai-settings-tab">
+      <div class="section">
+        <div class="section-title">AI Provider Selection</div>
+        <div class="provider-selection">
+          <label class="provider-option">
+            <input type="radio" name="aiProvider" value="openai" id="openaiProvider" checked>
+            <div class="provider-card">
+              <div class="provider-name">OpenAI</div>
+              <div class="provider-subtitle">Premium</div>
+            </div>
+          </label>
+          <label class="provider-option">
+            <input type="radio" name="aiProvider" value="gemini" id="geminiProvider">
+            <div class="provider-card">
+              <div class="provider-name">Gemini 2.0 Flash</div>
+              <div class="provider-subtitle">Free</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <!-- Global Add Key Form (shown when no keys exist) -->
+      <div class="section" id="add-key-form" style="display: none;">
+        <div class="section-title">Add Your First API Key</div>
+        <div class="add-key-form">
+          <textarea id="globalKeyInput" class="api-key-input" placeholder="Enter your API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
+          <button id="addGlobalKey" class="add-key-btn">+</button>
+        </div>
+        <div class="add-key-help">
+          <p>Get your API key from:</p>
+          <ul>
+            <li><strong>OpenAI:</strong> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></li>
+            <li><strong>Gemini:</strong> <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></li>
+          </ul>
+          <p><strong>Multiple keys:</strong> Paste multiple keys separated by newlines, commas, or semicolons</p>
+          <p><strong>Keyboard shortcut:</strong> Press Ctrl+Enter to add keys</p>
+        </div>
+      </div>
+      
+      <div class="section" id="openai-section">
+        <div class="section-title">OpenAI API Keys</div>
+        <div class="api-keys-container" id="openaiKeysContainer">
+          <div class="empty-state">
+            <div class="empty-icon">✨</div>
+            <div class="empty-text">No OpenAI keys added yet</div>
+          </div>
+        </div>
+        <div class="add-key-form">
+          <textarea id="openaiKeyInput" class="api-key-input" placeholder="Enter OpenAI API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
+          <button id="addOpenaiKey" class="add-key-btn">+</button>
+        </div>
+      </div>
+      
+      <div class="section" id="gemini-section" style="display: none;">
+        <div class="section-title">Google Gemini 2.0 Flash API Keys</div>
+        <div class="api-keys-container" id="geminiKeysContainer">
+          <div class="empty-state">
+            <div class="empty-icon">✨</div>
+            <div class="empty-text">No Gemini keys added yet</div>
+          </div>
+        </div>
+        <div class="add-key-form">
+          <textarea id="geminiKeyInput" class="api-key-input" placeholder="Enter Gemini 2.0 Flash API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
+          <button id="addGeminiKey" class="add-key-btn">+</button>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">API Statistics</div>
+        <div class="api-stats">
+          <div class="stat-item">
+            <span class="stat-label">Active Provider:</span>
+            <span id="activeProvider" class="stat-value">OpenAI</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Keys:</span>
+            <span id="totalKeys" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Last Used:</span>
+            <span id="lastUsed" class="stat-value">Never</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     
     <div class="tab-content active" id="url-opener-tab">
@@ -1021,20 +1462,7 @@
         <div id="urlStatus" class="url-status" style="display: none;"></div>
       </div>
       
-      <div class="section">
-        <div class="section-title">OpenAI API Configuration</div>
-        <div class="api-form">
-          <div class="api-input-group">
-            <input type="password" id="apiKeyInput" class="api-key-input" placeholder="Enter your OpenAI API key">
-            <button id="editApiKey" class="edit-btn" style="display: none;">✏️ Edit</button>
-          </div>
-          <div class="api-buttons">
-            <button id="saveApiKey" class="save-btn">Save Key</button>
-            <button id="syncApiKey" class="sync-btn">Sync & Test</button>
-          </div>
-          <div id="apiStatus" class="api-status" style="display: none;"></div>
-        </div>
-      </div>
+
       
       <div class="section">
         <div class="section-title">Copy Job Info Fields</div>

@@ -25,12 +25,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const totalCount = document.getElementById('totalCount');
   const matchCount = document.getElementById('matchCount');
   
-  // API Key management elements
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const saveApiKeyBtn = document.getElementById('saveApiKey');
-  const syncApiKeyBtn = document.getElementById('syncApiKey');
-  const editApiKeyBtn = document.getElementById('editApiKey');
-  const apiStatus = document.getElementById('apiStatus');
+  // AI Settings elements
+  const openaiProvider = document.getElementById('openaiProvider');
+  const geminiProvider = document.getElementById('geminiProvider');
+  const openaiSection = document.getElementById('openai-section');
+  const geminiSection = document.getElementById('gemini-section');
+  const openaiKeysContainer = document.getElementById('openaiKeysContainer');
+  const geminiKeysContainer = document.getElementById('geminiKeysContainer');
+  const openaiKeyInput = document.getElementById('openaiKeyInput');
+  const geminiKeyInput = document.getElementById('geminiKeyInput');
+  const addOpenaiKey = document.getElementById('addOpenaiKey');
+  const addGeminiKey = document.getElementById('addGeminiKey');
+  const activeProvider = document.getElementById('activeProvider');
+  const totalKeys = document.getElementById('totalKeys');
+  const lastUsed = document.getElementById('lastUsed');
   
   // Job Radar toggle element
   const jobRadarToggle = document.getElementById('jobRadarToggle');
@@ -207,67 +215,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Prevent API key copying
-  apiKeyInput.addEventListener('copy', function(e) {
-    e.preventDefault();
-    showApiStatus('API key copying is disabled for security', 'error');
-    return false;
-  });
-  
-  apiKeyInput.addEventListener('cut', function(e) {
-    e.preventDefault();
-    showApiStatus('API key cutting is disabled for security', 'error');
-    return false;
-  });
-  
-  // Prevent drag selection
-  apiKeyInput.addEventListener('mousedown', function(e) {
-    if (e.button === 0) { // Left click
-      this.setSelectionRange(0, 0); // Move cursor to start
-    }
-  });
-  
-  // Edit button functionality
-  editApiKeyBtn.addEventListener('click', function() {
-    enableApiKeyEditing();
-  });
-  
-  // Monitor input changes to enable/disable buttons
-  apiKeyInput.addEventListener('input', function() {
-    const hasValue = this.value.trim().length > 0;
-    saveApiKeyBtn.disabled = !hasValue;
-    syncApiKeyBtn.disabled = !hasValue;
-  });
-  
-  // Disable API key input when key is saved
-  function disableApiKeyInput(apiKey) {
-    if (apiKey && apiKey.length > 4) {
-      const masked = apiKey.substring(0, 4) + '••••••••••••••••••••';
-      apiKeyInput.value = masked;
-      apiKeyInput.disabled = true;
-      apiKeyInput.classList.add('disabled');
-      editApiKeyBtn.style.display = 'inline-block';
-      saveApiKeyBtn.style.display = 'none';
-      syncApiKeyBtn.style.display = 'none';
-    }
-  }
-  
-  // Enable API key editing
-  function enableApiKeyEditing() {
-    // Clear the input and enable editing
-    apiKeyInput.value = '';
-    apiKeyInput.disabled = false;
-    apiKeyInput.classList.remove('disabled');
-    editApiKeyBtn.style.display = 'none';
-    saveApiKeyBtn.style.display = 'inline-block';
-    syncApiKeyBtn.style.display = 'inline-block';
-    
-    // Disable buttons initially since input is empty
-    saveApiKeyBtn.disabled = true;
-    syncApiKeyBtn.disabled = true;
-    
-    apiKeyInput.focus();
-  }
+  // AI Settings functionality
+  let currentProvider = 'openai';
+  let openaiKeys = [];
+  let geminiKeys = [];
+  let selectedOpenaiKey = null;
+  let selectedGeminiKey = null;
   
   // Tab management elements
   const tabs = document.querySelectorAll('.tab');
@@ -276,14 +229,14 @@ document.addEventListener('DOMContentLoaded', function() {
   // Tab switching functionality
   tabs.forEach(tab => {
     tab.addEventListener('click', function() {
-      const targetTab = this.getAttribute('data-tab');
-      
-      // Remove active class from all tabs and contents
-      tabs.forEach(t => t.classList.remove('active'));
-      tabContents.forEach(content => content.classList.remove('active'));
-      
-      // Add active class to clicked tab and corresponding content
-      this.classList.add('active');
+        const targetTab = this.getAttribute('data-tab');
+        
+        // Remove active class from all tabs and contents
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // Add active class to clicked tab and corresponding content
+        this.classList.add('active');
       document.getElementById(`${targetTab}-tab`).classList.add('active');
     });
   });
@@ -339,13 +292,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     try {
+      // Calculate and show expected delay
+      const suggestedDelay = calculateSuggestedUrlDelay();
+      const totalTime = Math.round((urls.length - 1) * suggestedDelay / 1000);
+      
+      showUrlStatus(`Opening ${urls.length} URL(s) with ${suggestedDelay/1000}s delay between each (${totalTime}s total)...`, 'info');
+      
       // Delegate URL opening to background service worker so it continues even if popup closes
       await chrome.runtime.sendMessage({
         action: 'openUrlsInBackground',
         urls
       });
 
-      showUrlStatus(`Opening ${urls.length} URL(s) in background tabs...`, 'success');
+      showUrlStatus(`✅ Started opening ${urls.length} URL(s) with smart delays`, 'success');
       urlTextarea.value = ''; // Clear after dispatching
 
     } catch (error) {
@@ -368,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
   ];
   
   // Load settings from storage
-  chrome.storage.sync.get(['keywords', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
+  chrome.storage.sync.get(['keywords', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
     let keywords = result.keywords;
     
     // Initialize with default keywords if none exist
@@ -380,11 +339,62 @@ document.addEventListener('DOMContentLoaded', function() {
     renderKeywords(keywords);
     updateStats(keywords);
     
-    // Load saved API key
-    if (result.openaiApiKey) {
-      disableApiKeyInput(result.openaiApiKey);
-      validateApiKeyInput(result.openaiApiKey);
+    // Load AI provider settings
+    currentProvider = result.aiProvider || 'openai';
+    openaiKeys = result.openaiKeys || [];
+    geminiKeys = result.geminiKeys || [];
+    selectedOpenaiKey = result.selectedOpenaiKey || null;
+    selectedGeminiKey = result.selectedGeminiKey || null;
+    
+    // Migration: Convert old single API key to new format
+    if (result.openaiApiKey && openaiKeys.length === 0) {
+      console.log('Migrating old OpenAI API key to new format...');
+      const keyId = Date.now().toString();
+      const keyData = {
+        id: keyId,
+        key: result.openaiApiKey,
+        masked: result.openaiApiKey.substring(0, 12) + '••••••••••••••••••••',
+        status: 'unknown',
+        addedAt: new Date().toISOString(),
+        usage: {
+          requestsToday: 0,
+          tokensToday: 0,
+          lastReset: new Date().toDateString(),
+          rateLimitReset: null,
+          isRateLimited: false
+        }
+      };
+      openaiKeys.push(keyData);
+      selectedOpenaiKey = keyId;
+      
+      // Save the migrated data and remove old key
+      chrome.storage.sync.set({
+        openaiKeys: openaiKeys,
+        selectedOpenaiKey: selectedOpenaiKey
+      });
+      chrome.storage.sync.remove(['openaiApiKey']);
+      
+      console.log('Migration complete, testing API key...');
+      // Test the migrated key
+      testApiKey('openai', keyId);
+    } else if (openaiKeys.length === 0) {
+      console.log('No OpenAI keys found. User needs to add API key manually.');
     }
+    
+    // Update UI
+    updateProviderSelection();
+    renderApiKeys();
+    updateApiStats();
+    
+    // Debug: Log current state
+    console.log('Current AI Settings:', {
+      provider: currentProvider,
+      openaiKeys: openaiKeys.length,
+      geminiKeys: geminiKeys.length,
+      selectedOpenaiKey,
+      selectedGeminiKey,
+      hasOldKey: !!result.openaiApiKey
+    });
     
     // Load Job Radar toggle state (default to enabled)
     const isEnabled = result.jobRadarEnabled !== false; // Default to true if not set
@@ -412,122 +422,693 @@ document.addEventListener('DOMContentLoaded', function() {
   copyIncludeTechStack && copyIncludeTechStack.addEventListener('change', saveCopyPrefs);
   copyIncludeMatchRate && copyIncludeMatchRate.addEventListener('change', saveCopyPrefs);
   
-  // API Key management
-  saveApiKeyBtn.addEventListener('click', function() {
-    const apiKey = apiKeyInput.value.trim();
-    
-    if (apiKey) {
-      chrome.storage.sync.set({openaiApiKey: apiKey}, function() {
-        showApiStatus('API key saved successfully!', 'success');
-        validateApiKeyInput(apiKey);
-        
-        // Update config in content script
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-          if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, {
-              action: 'updateApiKey',
-              apiKey: apiKey
-            });
-          }
-        });
-      });
-    } else {
-      showApiStatus('Please enter an API key', 'error');
+  // AI Provider Selection
+  openaiProvider.addEventListener('change', function() {
+    if (this.checked) {
+      currentProvider = 'openai';
+      updateProviderSelection();
+      saveAiSettings();
     }
   });
   
-  syncApiKeyBtn.addEventListener('click', function() {
-    const apiKey = apiKeyInput.value.trim();
+  geminiProvider.addEventListener('change', function() {
+    if (this.checked) {
+      currentProvider = 'gemini';
+      updateProviderSelection();
+      saveAiSettings();
+    }
+  });
+  
+  // Add API Key functionality
+  addOpenaiKey.addEventListener('click', async function() {
+    const apiKey = openaiKeyInput.value.trim();
+    if (apiKey) {
+      // Check if multiple keys are pasted (contains newlines, commas, or semicolons)
+      if (apiKey.includes('\n') || apiKey.includes(',') || apiKey.includes(';')) {
+        await addMultipleApiKeys('openai', apiKey);
+      } else {
+        await addApiKey('openai', apiKey);
+      }
+      openaiKeyInput.value = '';
+    }
+  });
+  
+  addGeminiKey.addEventListener('click', async function() {
+    const apiKey = geminiKeyInput.value.trim();
+    if (apiKey) {
+      // Check if multiple keys are pasted (contains newlines, commas, or semicolons)
+      if (apiKey.includes('\n') || apiKey.includes(',') || apiKey.includes(';')) {
+        await addMultipleApiKeys('gemini', apiKey);
+      } else {
+        await addApiKey('gemini', apiKey);
+      }
+      geminiKeyInput.value = '';
+    }
+  });
+  
+  // Global add key functionality
+  const addGlobalKey = document.getElementById('addGlobalKey');
+  const globalKeyInput = document.getElementById('globalKeyInput');
+  
+  if (addGlobalKey && globalKeyInput) {
+    addGlobalKey.addEventListener('click', async function() {
+      const apiKey = globalKeyInput.value.trim();
+      if (apiKey) {
+        // Check if multiple keys are pasted (contains newlines, commas, or semicolons)
+        if (apiKey.includes('\n') || apiKey.includes(',') || apiKey.includes(';')) {
+          await addMultipleApiKeys(currentProvider, apiKey);
+        } else {
+          await addApiKey(currentProvider, apiKey);
+        }
+        globalKeyInput.value = '';
+      }
+    });
     
-    if (!apiKey) {
-      showApiStatus('Please enter an API key first', 'error');
+    globalKeyInput.addEventListener('keydown', async function(e) {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        await addGlobalKey.click();
+      }
+    });
+  }
+  
+  // Ctrl+Enter key support for API key textareas
+  openaiKeyInput.addEventListener('keydown', async function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      await addOpenaiKey.click();
+    }
+  });
+  
+  geminiKeyInput.addEventListener('keydown', async function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      await addGeminiKey.click();
+    }
+  });
+  
+  // AI Settings Functions
+  function updateProviderSelection() {
+    if (currentProvider === 'openai') {
+      openaiProvider.checked = true;
+      geminiProvider.checked = false;
+      // Always show OpenAI section when selected
+      openaiSection.style.display = 'block';
+      // Always hide Gemini section when OpenAI is selected
+      geminiSection.style.display = 'none';
+    } else {
+      openaiProvider.checked = false;
+      geminiProvider.checked = true;
+      // Always hide OpenAI section when Gemini is selected
+      openaiSection.style.display = 'none';
+      // Always show Gemini section when selected
+      geminiSection.style.display = 'block';
+    }
+    
+    // Re-render keys for the selected provider
+    renderApiKeys();
+    
+    // Show add key form when no keys exist for selected provider
+    showAddKeyForm();
+  }
+  
+  function showAddKeyForm() {
+    const addKeyForm = document.getElementById('add-key-form');
+    const openaiAddForm = document.querySelector('#openai-section .add-key-form');
+    const geminiAddForm = document.querySelector('#gemini-section .add-key-form');
+    
+    if (addKeyForm) {
+      // Show global add key form only if no keys exist for the selected provider
+      if ((currentProvider === 'openai' && openaiKeys.length === 0) || 
+          (currentProvider === 'gemini' && geminiKeys.length === 0)) {
+        addKeyForm.style.display = 'block';
+        
+        // Hide provider-specific add forms when global form is shown
+        if (openaiAddForm) openaiAddForm.style.display = 'none';
+        if (geminiAddForm) geminiAddForm.style.display = 'none';
+        
+        // Update placeholder text based on selected provider
+        const globalKeyInput = document.getElementById('globalKeyInput');
+        if (globalKeyInput) {
+          if (currentProvider === 'openai') {
+            globalKeyInput.placeholder = 'Enter your OpenAI API key (or paste multiple keys)\nPress Ctrl+Enter to add';
+          } else {
+            globalKeyInput.placeholder = 'Enter your Gemini API key (or paste multiple keys)\nPress Ctrl+Enter to add';
+          }
+        }
+      } else {
+        addKeyForm.style.display = 'none';
+        
+        // Show provider-specific add forms when keys exist
+        if (currentProvider === 'openai' && openaiAddForm) {
+          openaiAddForm.style.display = 'flex';
+        } else if (currentProvider === 'gemini' && geminiAddForm) {
+          geminiAddForm.style.display = 'flex';
+        }
+      }
+    }
+  }
+  
+  async function addApiKey(provider, apiKey) {
+    // Check for duplicate API keys
+    const existingKeys = provider === 'openai' ? openaiKeys : geminiKeys;
+    const isDuplicate = existingKeys.some(key => key.key === apiKey);
+    
+    if (isDuplicate) {
+      showErrorMessage('This API key already exists!');
       return;
     }
     
-    // Disable button and show loading
-    syncApiKeyBtn.disabled = true;
-    showApiStatus('Testing API key...', 'loading');
+    // Show loading state
+    const addButton = provider === 'openai' ? document.getElementById('addOpenaiKey') : document.getElementById('addGeminiKey');
+    const originalText = addButton.textContent;
+    addButton.textContent = '⏳';
+    addButton.disabled = true;
+    
+    try {
+      // Test the API key first
+      const isValid = await testApiKeyBeforeAdding(provider, apiKey);
+      
+      if (!isValid) {
+        showErrorMessage('Invalid API key! Please check your key and try again.');
+        return;
+      }
+      
+      // Only add if the key is valid
+      const keyId = Date.now().toString();
+      const keyData = {
+        id: keyId,
+        key: apiKey,
+        masked: apiKey.substring(0, 12) + '••••••••••••••••••••',
+        status: 'valid',
+        addedAt: new Date().toISOString(),
+        usage: {
+          requestsToday: 0,
+          tokensToday: 0,
+          lastReset: new Date().toDateString(),
+          rateLimitReset: null,
+          isRateLimited: false,
+          costToday: 0
+        }
+      };
+      
+      if (provider === 'openai') {
+        openaiKeys.push(keyData);
+        if (!selectedOpenaiKey) {
+          selectedOpenaiKey = keyId;
+        }
+      } else {
+        geminiKeys.push(keyData);
+        if (!selectedGeminiKey) {
+          selectedGeminiKey = keyId;
+        }
+      }
+      
+      renderApiKeys();
+      updateApiStats();
+      saveAiSettings();
+      showSuccessMessage('API key added and validated successfully!');
+      
+    } catch (error) {
+      console.error('Error adding API key:', error);
+      showErrorMessage('Failed to validate API key. Please check your key and try again.');
+    } finally {
+      // Reset button state
+      addButton.textContent = originalText;
+      addButton.disabled = false;
+    }
+  }
+
+  async function addMultipleApiKeys(provider, apiKeysText) {
+    // Parse multiple keys from text (split by newlines, commas, or spaces)
+    const keys = apiKeysText
+      .split(/[\n,;]/)
+      .map(key => key.trim())
+      .filter(key => key.length > 0);
+
+    if (keys.length === 0) {
+      showErrorMessage('No valid API keys found in the input!');
+      return;
+    }
+
+    if (keys.length > 10) {
+      showErrorMessage('Too many keys! Please add maximum 10 keys at once.');
+      return;
+    }
+
+    // Show loading state
+    const addButton = provider === 'openai' ? document.getElementById('addOpenaiKey') : document.getElementById('addGeminiKey');
+    const originalText = addButton.textContent;
+    addButton.textContent = `⏳ Adding ${keys.length} keys...`;
+    addButton.disabled = true;
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        const apiKey = keys[i];
+        
+        // Update progress
+        addButton.textContent = `⏳ Validating ${i + 1}/${keys.length}...`;
+        
+        // Check for duplicates
+        const existingKeys = provider === 'openai' ? openaiKeys : geminiKeys;
+        const isDuplicate = existingKeys.some(key => key.key === apiKey);
+        
+        if (isDuplicate) {
+          errors.push(`Key ${i + 1}: Already exists`);
+          errorCount++;
+          continue;
+        }
     
     // Test the API key
-    testApiKey(apiKey).then(isValid => {
-      if (isValid) {
-        showApiStatus('✅ API key is valid and working!', 'success');
-        validateApiKeyInput(apiKey);
+        const isValid = await testApiKeyBeforeAdding(provider, apiKey);
         
-        // Save the key if it's valid
-        chrome.storage.sync.set({openaiApiKey: apiKey}, function() {
-          // Disable the input form after successful sync
-          disableApiKeyInput(apiKey);
+        if (!isValid) {
+          errors.push(`Key ${i + 1}: Invalid key`);
+          errorCount++;
+          continue;
+        }
+
+        // Add the valid key
+        const keyId = Date.now().toString() + '_' + i;
+        const keyData = {
+          id: keyId,
+          key: apiKey,
+          masked: apiKey.substring(0, 12) + '••••••••••••••••••••',
+          status: 'valid',
+          addedAt: new Date().toISOString(),
+          usage: {
+            requestsToday: 0,
+            tokensToday: 0,
+            lastReset: new Date().toDateString(),
+            rateLimitReset: null,
+            isRateLimited: false,
+            costToday: 0
+          }
+        };
+
+        if (provider === 'openai') {
+          openaiKeys.push(keyData);
+          if (!selectedOpenaiKey) {
+            selectedOpenaiKey = keyId;
+          }
+        } else {
+          geminiKeys.push(keyData);
+          if (!selectedGeminiKey) {
+            selectedGeminiKey = keyId;
+          }
+        }
+        
+        successCount++;
+      }
+
+      // Update UI
+      renderApiKeys();
+      updateApiStats();
+      saveAiSettings();
+
+      // Show results
+      if (successCount > 0 && errorCount === 0) {
+        showSuccessMessage(`Successfully added ${successCount} API key${successCount > 1 ? 's' : ''}!`);
+      } else if (successCount > 0 && errorCount > 0) {
+        showErrorMessage(`Added ${successCount} key${successCount > 1 ? 's' : ''}, ${errorCount} failed. ${errors.join(', ')}`);
+      } else {
+        showErrorMessage(`Failed to add any keys. ${errors.join(', ')}`);
+      }
+
+    } catch (error) {
+      console.error('Error adding multiple API keys:', error);
+      showErrorMessage('Failed to add API keys. Please try again.');
+    } finally {
+      // Reset button state
+      addButton.textContent = originalText;
+      addButton.disabled = false;
+    }
+  }
+  
+  function removeApiKey(provider, keyId) {
+    const keys = provider === 'openai' ? openaiKeys : geminiKeys;
+    const keyToDelete = keys.find(key => key.id === keyId);
+    
+    if (!keyToDelete) return;
+    
+    // Show confirmation dialog
+    if (confirm(`Are you sure you want to delete this API key?\n\n${keyToDelete.masked}`)) {
+      if (provider === 'openai') {
+        openaiKeys = openaiKeys.filter(key => key.id !== keyId);
+        if (selectedOpenaiKey === keyId) {
+          selectedOpenaiKey = openaiKeys.length > 0 ? openaiKeys[0].id : null;
+        }
+      } else {
+        geminiKeys = geminiKeys.filter(key => key.id !== keyId);
+        if (selectedGeminiKey === keyId) {
+          selectedGeminiKey = geminiKeys.length > 0 ? geminiKeys[0].id : null;
+        }
+      }
+      
+      renderApiKeys();
+      updateApiStats();
+      saveAiSettings();
+      showSuccessMessage('API key deleted successfully!');
+    }
+  }
+  
+  function selectApiKey(provider, keyId) {
+    if (provider === 'openai') {
+      selectedOpenaiKey = keyId;
+    } else {
+      selectedGeminiKey = keyId;
+    }
+    
+    renderApiKeys();
+    saveAiSettings();
+  }
+  
+  function renderApiKeys() {
+    // Only render keys for the currently selected provider
+    if (currentProvider === 'openai') {
+      // Render OpenAI keys
+      if (openaiKeys.length === 0) {
+        openaiKeysContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🔑</div>
+            <div class="empty-text">No OpenAI keys added yet</div>
+            <div class="empty-subtext">Add your OpenAI API key to enable GPT-4</div>
+          </div>
+        `;
+      } else {
+        openaiKeysContainer.innerHTML = openaiKeys.map(key => {
+          const usage = key.usage || { requestsToday: 0, tokensToday: 0, isRateLimited: false };
+          const statusClass = key.status === 'valid' ? (usage.isRateLimited ? 'rate-limited' : 'valid') : key.status;
+          const statusText = usage.isRateLimited ? 'Rate Limited' : key.status;
           
-          // Update config in content script
-          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            if (tabs[0]) {
-              chrome.tabs.sendMessage(tabs[0].id, {
-                action: 'updateApiKey',
-                apiKey: apiKey
-              });
+          return `
+            <div class="api-key-item ${selectedOpenaiKey === key.id ? 'selected' : ''}">
+              <div class="api-key-info">
+                <span class="api-key-masked">${key.masked}</span>
+                <span class="api-key-status ${statusClass}">${statusText}</span>
+                <div class="api-key-usage">
+                  <span class="usage-item">Requests: ${usage.requestsToday}</span>
+                  <span class="usage-item">Tokens: ${Math.round(usage.tokensToday/1000)}K</span>
+                  <span class="usage-item cost-item">Cost: $${(usage.costToday || 0).toFixed(4)}</span>
+                </div>
+              </div>
+              <div class="api-key-actions">
+                <button class="api-key-btn select" data-action="select" data-provider="openai" data-key-id="${key.id}" title="Select this key">✓</button>
+                <button class="api-key-btn delete" data-action="delete" data-provider="openai" data-key-id="${key.id}" title="Delete this key">🗑️</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    } else {
+      // Render Gemini keys
+      if (geminiKeys.length === 0) {
+        geminiKeysContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">✨</div>
+            <div class="empty-text">No Gemini keys added yet</div>
+          </div>
+        `;
+      } else {
+        geminiKeysContainer.innerHTML = geminiKeys.map(key => {
+          const usage = key.usage || { requestsToday: 0, tokensToday: 0, isRateLimited: false };
+          const statusClass = key.status === 'valid' ? (usage.isRateLimited ? 'rate-limited' : 'valid') : key.status;
+          const statusText = usage.isRateLimited ? 'Rate Limited' : key.status;
+          
+          return `
+            <div class="api-key-item ${selectedGeminiKey === key.id ? 'selected' : ''}">
+              <div class="api-key-info">
+                <span class="api-key-masked">${key.masked}</span>
+                <span class="api-key-status ${statusClass}">${statusText}</span>
+                <div class="api-key-usage">
+                  <span class="usage-item">Requests: ${usage.requestsToday}/250</span>
+                  <span class="usage-item">Tokens: ${Math.round(usage.tokensToday/1000)}K/250K</span>
+                  ${usage.requestsToday === 0 ? '<span class="usage-item fresh-key">🆕 Fresh</span>' : ''}
+                </div>
+              </div>
+              <div class="api-key-actions">
+                <button class="api-key-btn select" data-action="select" data-provider="gemini" data-key-id="${key.id}" title="Select this key">✓</button>
+                <button class="api-key-btn delete" data-action="delete" data-provider="gemini" data-key-id="${key.id}" title="Delete this key">🗑️</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    
+    // Add event listeners for API key buttons
+    setTimeout(() => {
+      document.querySelectorAll('.api-key-btn').forEach(button => {
+        button.addEventListener('click', function() {
+          const action = this.getAttribute('data-action');
+          const provider = this.getAttribute('data-provider');
+          const keyId = this.getAttribute('data-key-id');
+          
+          if (action === 'select') {
+            selectApiKey(provider, keyId);
+          } else if (action === 'delete') {
+            removeApiKey(provider, keyId);
             }
           });
         });
-      } else {
-        showApiStatus('❌ Invalid API key. Please check and try again.', 'error');
-        invalidateApiKeyInput();
-      }
-    }).catch(error => {
-      showApiStatus('❌ Error testing API key: ' + error.message, 'error');
-      invalidateApiKeyInput();
-    }).finally(() => {
-      syncApiKeyBtn.disabled = false;
-    });
-  });
+    }, 100);
+  }
   
-  // Test API key with OpenAI
-  async function testApiKey(apiKey) {
+  function updateApiStats() {
+    const totalKeysCount = openaiKeys.length + geminiKeys.length;
+    const providerName = currentProvider === 'openai' ? 'OpenAI' : 'Google Gemini';
+    
+    // Count available keys (not rate limited)
+    const availableKeys = currentProvider === 'openai' 
+      ? openaiKeys.filter(key => !key.usage?.isRateLimited && key.status === 'valid').length
+      : geminiKeys.filter(key => !key.usage?.isRateLimited && key.status === 'valid').length;
+    
+    // Calculate total daily capacity/cost for current provider
+    let totalDailyCapacity = 0;
+    let totalDailyCost = 0;
+    
+    if (currentProvider === 'openai') {
+      // Calculate total cost for OpenAI keys
+      totalDailyCost = openaiKeys.reduce((total, key) => {
+        return total + (key.usage?.costToday || 0);
+      }, 0);
+      } else {
+      totalDailyCapacity = availableKeys * 250; // 250 requests per Gemini key
+    }
+    
+    activeProvider.textContent = providerName;
+    totalKeys.textContent = totalKeysCount;
+    
+    // Update last used with capacity/cost info and timing recommendations
+    if (availableKeys === 0) {
+      lastUsed.textContent = 'All keys limited';
+    } else if (currentProvider === 'openai') {
+      lastUsed.textContent = `Cost: $${totalDailyCost.toFixed(4)} | Wait 1s between pages`;
+    } else if (currentProvider === 'gemini') {
+      const suggestedDelay = calculateSuggestedUrlDelay();
+      lastUsed.textContent = `${availableKeys} keys = ${totalDailyCapacity} requests/day | Wait ${suggestedDelay}s between pages`;
+    } else {
+      lastUsed.textContent = 'Available';
+    }
+  }
+  
+  // Calculate suggested delay between opening URLs (same logic as content.js)
+  function calculateSuggestedUrlDelay() {
+    if (currentProvider !== 'gemini') {
+      return 1; // 1 second for OpenAI
+    }
+    
+    const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
+    
+    if (geminiKeyCount <= 1) {
+      return 6; // 6 seconds for single key
+    }
+    
+    // Estimate user might open 30-60 job pages
+    const estimatedPages = 45;
+    
+    // Calculate optimal delay: 60 seconds / estimated pages
+    const totalTimeSeconds = 60;
+    const delayPerPage = totalTimeSeconds / estimatedPages;
+    
+    // Adjust based on number of keys (more keys = can open faster)
+    const adjustedDelay = delayPerPage / Math.sqrt(geminiKeyCount);
+    
+    // Minimum 1 second, maximum 10 seconds
+    const finalDelay = Math.max(1, Math.min(10, adjustedDelay));
+    
+    return Math.round(finalDelay);
+  }
+  
+  function getNextAvailableKey(provider) {
+    const keys = provider === 'openai' ? openaiKeys : geminiKeys;
+    
+    if (provider === 'openai') {
+      // For OpenAI: only check if key is valid (no rate limits)
+      const availableKeys = keys.filter(key => key.status === 'valid');
+      
+      if (availableKeys.length === 0) {
+        return null;
+      }
+      
+      // Smart rotation: Use the key with the least usage today
+      const keyWithLeastUsage = availableKeys.reduce((least, current) => {
+        const leastUsage = least.usage?.requestsToday || 0;
+        const currentUsage = current.usage?.requestsToday || 0;
+        return currentUsage < leastUsage ? current : least;
+      });
+      
+      return keyWithLeastUsage;
+    } else {
+      // For Gemini: check rate limits
+      const availableKeys = keys.filter(key => 
+        key.status === 'valid' && 
+        !key.usage?.isRateLimited &&
+        (key.usage?.requestsToday || 0) < 250 && (key.usage?.tokensToday || 0) < 250000
+      );
+      
+      if (availableKeys.length === 0) {
+        return null;
+      }
+      
+      // Smart rotation: Use the key with the least usage today
+      const keyWithLeastUsage = availableKeys.reduce((least, current) => {
+        const leastUsage = least.usage?.requestsToday || 0;
+        const currentUsage = current.usage?.requestsToday || 0;
+        return currentUsage < leastUsage ? current : least;
+      });
+      
+      return keyWithLeastUsage;
+    }
+  }
+  
+  function updateKeyUsage(provider, keyId, tokensUsed = 0) {
+    const keys = provider === 'openai' ? openaiKeys : geminiKeys;
+    const key = keys.find(k => k.id === keyId);
+    
+    if (key) {
+      if (!key.usage) {
+        key.usage = {
+          requestsToday: 0,
+          tokensToday: 0,
+          lastReset: new Date().toDateString(),
+          rateLimitReset: null,
+          isRateLimited: false
+        };
+      }
+      
+      // Reset daily counters if it's a new day
+      const today = new Date().toDateString();
+      if (key.usage.lastReset !== today) {
+        key.usage.requestsToday = 0;
+        key.usage.tokensToday = 0;
+        key.usage.lastReset = today;
+        key.usage.isRateLimited = false;
+      }
+      
+      key.usage.requestsToday += 1;
+      key.usage.tokensToday += tokensUsed;
+      
+      // Calculate cost for OpenAI (GPT-4 pricing: $0.03/1K input tokens, $0.06/1K output tokens)
+      if (provider === 'openai' && tokensUsed > 0) {
+        // Estimate: assume 70% input tokens, 30% output tokens for job extraction
+        const inputTokens = Math.round(tokensUsed * 0.7);
+        const outputTokens = Math.round(tokensUsed * 0.3);
+        const inputCost = (inputTokens / 1000) * 0.03;
+        const outputCost = (outputTokens / 1000) * 0.06;
+        const requestCost = inputCost + outputCost;
+        
+        key.usage.costToday = (key.usage.costToday || 0) + requestCost;
+      }
+      
+      // Check if key is approaching limits (only for Gemini)
+      if (provider === 'gemini') {
+        const maxRequests = 250;
+        const maxTokens = 250000;
+        
+        if (key.usage.requestsToday >= maxRequests || key.usage.tokensToday >= maxTokens) {
+          key.usage.isRateLimited = true;
+          key.usage.rateLimitReset = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
+      
+      renderApiKeys();
+      updateApiStats();
+      saveAiSettings();
+    }
+  }
+  
+  function saveAiSettings() {
+    chrome.storage.sync.set({
+      aiProvider: currentProvider,
+      openaiKeys: openaiKeys,
+      geminiKeys: geminiKeys,
+      selectedOpenaiKey: selectedOpenaiKey,
+      selectedGeminiKey: selectedGeminiKey
+    });
+  }
+  
+  async function testApiKeyBeforeAdding(provider, apiKey) {
     try {
+      let isValid = false;
+      
+      if (provider === 'openai') {
       const response = await fetch('https://api.openai.com/v1/models', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
         }
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return data.data && data.data.length > 0;
-      } else if (response.status === 401) {
-        throw new Error('Invalid API key');
+        isValid = response.ok;
       } else {
-        throw new Error(`API error: ${response.status}`);
+        // Test Gemini API key
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        isValid = response.ok;
       }
+      
+      return isValid;
     } catch (error) {
-      throw error;
+      console.error('API key validation error:', error);
+      return false;
     }
   }
-  
-  // Show API status message
-  function showApiStatus(message, type) {
-    apiStatus.textContent = message;
-    apiStatus.className = `api-status ${type}`;
-    apiStatus.style.display = 'block';
+
+  async function testApiKey(provider, keyId) {
+    const keys = provider === 'openai' ? openaiKeys : geminiKeys;
+    const key = keys.find(k => k.id === keyId);
+    if (!key) return;
     
-    // Auto-hide success messages after 3 seconds
-    if (type === 'success') {
-      setTimeout(() => {
-        apiStatus.style.display = 'none';
-      }, 3000);
+    try {
+      let isValid = false;
+      
+      if (provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/models', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${key.key}`
+          }
+        });
+        isValid = response.ok;
+      } else {
+        // Test Gemini API key
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key.key}`);
+        isValid = response.ok;
+      }
+      
+      // Update key status
+      key.status = isValid ? 'valid' : 'invalid';
+      renderApiKeys();
+      saveAiSettings();
+      
+    } catch (error) {
+      key.status = 'invalid';
+      renderApiKeys();
+      saveAiSettings();
     }
-  }
-  
-  // Validate API key input styling
-  function validateApiKeyInput(apiKey) {
-    apiKeyInput.classList.remove('invalid');
-    apiKeyInput.classList.add('valid');
-  }
-  
-  // Invalidate API key input styling
-  function invalidateApiKeyInput() {
-    apiKeyInput.classList.remove('valid');
-    apiKeyInput.classList.add('invalid');
   }
   
   // Add keyword with beautiful animation
@@ -571,12 +1152,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // Enter key support for API key input
-  apiKeyInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      saveApiKeyBtn.click();
-    }
-  });
+
   
   // Render keywords list with beautiful animations
   function renderKeywords(keywords) {
