@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const jobRadarToggle = document.getElementById('jobRadarToggle');
   // Cover Letter toggle element
   const coverLetterToggle = document.getElementById('coverLetterToggle');
+  // AI Analysis toggle element
+  const aiAnalysisToggle = document.getElementById('aiAnalysisToggle');
   // Copy preferences elements
   const copyIncludeIndustry = document.getElementById('copyIncludeIndustry');
   const copyIncludeCompanySize = document.getElementById('copyIncludeCompanySize');
@@ -222,6 +224,26 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+
+  // AI Analysis toggle functionality
+  aiAnalysisToggle.addEventListener('change', function() {
+    const isEnabled = this.checked;
+    console.log('AI Analysis toggle changed to:', isEnabled);
+    
+    // Save the state
+    chrome.storage.sync.set({aiAnalysisEnabled: isEnabled}, function() {
+      console.log('AI Analysis state saved to storage:', isEnabled);
+      // Update all tabs with the new state
+      updateAiAnalysisState(isEnabled);
+      
+      // Show feedback
+      if (isEnabled) {
+        showSuccessMessage('AI Analysis enabled!');
+      } else {
+        showSuccessMessage('AI Analysis disabled!');
+      }
+    });
+  });
   
   // Function to update Job Radar state across all tabs
   function updateJobRadarState(isEnabled) {
@@ -243,6 +265,20 @@ document.addEventListener('DOMContentLoaded', function() {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, {
           action: 'updateCoverLetterState',
+          enabled: isEnabled
+        }).catch(() => {
+          // Ignore errors for tabs that don't have the content script
+        });
+      });
+    });
+  }
+
+  // Function to update AI Analysis state across all tabs
+  function updateAiAnalysisState(isEnabled) {
+    chrome.tabs.query({}, function(tabs) {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'updateAiAnalysisState',
           enabled: isEnabled
         }).catch(() => {
           // Ignore errors for tabs that don't have the content script
@@ -362,8 +398,233 @@ document.addEventListener('DOMContentLoaded', function() {
     { text: 'relocate', color: '#DDA0DD' }
   ];
   
+  // Load API keys from IndexedDB only (pure IndexedDB system)
+  async function loadApiKeysFromStorage() {
+    try {
+      // Load directly from IndexedDB (only storage system)
+      const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
+        apiKeyStorage.loadApiKeys('openai'),
+        apiKeyStorage.loadApiKeys('gemini')
+      ]);
+      
+      console.log('✅ Loaded API keys from IndexedDB:', {
+        openai: indexedOpenaiKeys.length,
+        gemini: indexedGeminiKeys.length
+      });
+      
+      return {
+        openaiKeys: indexedOpenaiKeys,
+        geminiKeys: indexedGeminiKeys
+      };
+    } catch (error) {
+      console.error('❌ Error loading API keys from IndexedDB:', error);
+      return { openaiKeys: [], geminiKeys: [] };
+    }
+  }
+
+  // IndexedDB Storage Manager for large numbers of API keys
+  class ApiKeyStorageManager {
+    constructor() {
+      this.dbName = 'JobRadarApiKeys';
+      this.dbVersion = 1;
+      this.db = null;
+    }
+
+    async init() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.dbName, this.dbVersion);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          this.db = request.result;
+          resolve(this.db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          
+          // Create object stores for API keys
+          if (!db.objectStoreNames.contains('openaiKeys')) {
+            const openaiStore = db.createObjectStore('openaiKeys', { keyPath: 'id' });
+            openaiStore.createIndex('key', 'key', { unique: true });
+            openaiStore.createIndex('status', 'status');
+          }
+          
+          if (!db.objectStoreNames.contains('geminiKeys')) {
+            const geminiStore = db.createObjectStore('geminiKeys', { keyPath: 'id' });
+            geminiStore.createIndex('key', 'key', { unique: true });
+            geminiStore.createIndex('status', 'status');
+          }
+        };
+      });
+    }
+
+    async saveApiKeys(provider, keys) {
+      if (!this.db) await this.init();
+      
+      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      const transaction = this.db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      // Clear existing keys first
+      await new Promise((resolve, reject) => {
+        const clearRequest = store.clear();
+        clearRequest.onsuccess = () => resolve();
+        clearRequest.onerror = () => reject(clearRequest.error);
+      });
+      
+      // Add new keys
+      const promises = keys.map(key => {
+        return new Promise((resolve, reject) => {
+          const addRequest = store.add(key);
+          addRequest.onsuccess = () => resolve();
+          addRequest.onerror = () => reject(addRequest.error);
+        });
+      });
+      
+      await Promise.all(promises);
+      console.log(`✅ Saved ${keys.length} ${provider} keys to IndexedDB`);
+    }
+
+    async loadApiKeys(provider) {
+      if (!this.db) await this.init();
+      
+      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      const transaction = this.db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      
+      return new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async addApiKey(provider, keyData) {
+      if (!this.db) await this.init();
+      
+      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      const transaction = this.db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      return new Promise((resolve, reject) => {
+        const request = store.add(keyData);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async removeApiKey(provider, keyId) {
+      if (!this.db) await this.init();
+      
+      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      const transaction = this.db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      return new Promise((resolve, reject) => {
+        const request = store.delete(keyId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async getKeyCount(provider) {
+      if (!this.db) await this.init();
+      
+      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      const transaction = this.db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      
+      return new Promise((resolve, reject) => {
+        const request = store.count();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+  }
+
+  // Initialize storage manager
+  const apiKeyStorage = new ApiKeyStorageManager();
+
+  // One-time migration from Chrome storage to IndexedDB (if needed)
+  async function oneTimeMigrationToIndexedDB() {
+    try {
+      // Check if IndexedDB already has keys
+      const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
+        apiKeyStorage.loadApiKeys('openai'),
+        apiKeyStorage.loadApiKeys('gemini')
+      ]);
+      
+      // If IndexedDB already has keys, no migration needed
+      if (indexedOpenaiKeys.length > 0 || indexedGeminiKeys.length > 0) {
+        console.log('✅ IndexedDB already has API keys, no migration needed');
+        return;
+      }
+      
+      // Check Chrome storage for existing keys
+      const [localData, syncData] = await Promise.all([
+        new Promise(resolve => chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve)),
+        new Promise(resolve => chrome.storage.sync.get(['openaiKeys', 'geminiKeys'], resolve))
+      ]);
+      
+      const openaiKeysLocal = localData.openaiKeys || [];
+      const geminiKeysLocal = localData.geminiKeys || [];
+      const openaiKeysSync = syncData.openaiKeys || [];
+      const geminiKeysSync = syncData.geminiKeys || [];
+      
+      // Use local storage if available, otherwise sync
+      const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
+      const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
+      
+      // Migrate to IndexedDB if we found keys in Chrome storage
+      if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
+        console.log('🔄 One-time migration: Moving API keys from Chrome storage to IndexedDB...');
+        
+        if (mergedOpenaiKeys.length > 0) {
+          await apiKeyStorage.saveApiKeys('openai', mergedOpenaiKeys);
+          console.log(`✅ Migrated ${mergedOpenaiKeys.length} OpenAI keys to IndexedDB`);
+        }
+        if (mergedGeminiKeys.length > 0) {
+          await apiKeyStorage.saveApiKeys('gemini', mergedGeminiKeys);
+          console.log(`✅ Migrated ${mergedGeminiKeys.length} Gemini keys to IndexedDB`);
+        }
+        
+        console.log('🎉 One-time migration completed successfully!');
+        
+        // Clear Chrome storage after successful migration
+        chrome.storage.local.remove(['openaiKeys', 'geminiKeys']);
+        chrome.storage.sync.remove(['openaiKeys', 'geminiKeys']);
+        console.log('🧹 Cleared API keys from Chrome storage');
+      }
+      
+    } catch (error) {
+      console.error('❌ One-time migration failed:', error);
+    }
+  }
+
+  // Check storage quota and provide helpful error messages
+  async function checkStorageQuota() {
+    try {
+      const quota = await chrome.storage.local.getBytesInUse();
+      const maxQuota = chrome.storage.local.QUOTA_BYTES || 5242880; // 5MB default
+      const usagePercent = (quota / maxQuota) * 100;
+      
+      console.log(`Storage usage: ${quota} bytes (${usagePercent.toFixed(1)}% of ${maxQuota} bytes)`);
+      
+      if (usagePercent > 80) {
+        console.warn('Storage quota is getting high:', usagePercent.toFixed(1) + '%');
+        return { warning: true, usage: usagePercent };
+      }
+      
+      return { warning: false, usage: usagePercent };
+    } catch (error) {
+      console.error('Error checking storage quota:', error);
+      return { warning: false, usage: 0 };
+    }
+  }
+  
   // Load settings from storage
-  chrome.storage.sync.get(['keywords', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
+  chrome.storage.sync.get(['keywords', 'aiProvider', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'coverLetterEnabled', 'aiAnalysisEnabled', 'copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], async function(result) {
     let keywords = result.keywords;
     
     // Initialize with default keywords if none exist
@@ -377,8 +638,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load AI provider settings
     currentProvider = result.aiProvider || 'openai';
-    openaiKeys = result.openaiKeys || [];
-    geminiKeys = result.geminiKeys || [];
+    
+    // Run one-time migration from Chrome storage to IndexedDB (if needed)
+    await oneTimeMigrationToIndexedDB();
+    
+    // Load API keys from IndexedDB only
+    const apiKeysData = await loadApiKeysFromStorage();
+    openaiKeys = apiKeysData.openaiKeys;
+    geminiKeys = apiKeysData.geminiKeys;
+    
+    // Debug: Log what we loaded
+    console.log('Popup loaded API keys from IndexedDB:', {
+      openai: openaiKeys.length,
+      gemini: geminiKeys.length,
+      openaiKeys: openaiKeys.map(k => ({ id: k.id, status: k.status, masked: k.masked })),
+      geminiKeys: geminiKeys.map(k => ({ id: k.id, status: k.status, masked: k.masked }))
+    });
+    
     selectedOpenaiKey = result.selectedOpenaiKey || null;
     selectedGeminiKey = result.selectedGeminiKey || null;
     
@@ -445,6 +721,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update all tabs with the current cover letter state
     updateCoverLetterState(coverLetterEnabled);
+
+    // Load AI Analysis toggle state (default to enabled)
+    console.log('Loading AI Analysis state from storage:', result.aiAnalysisEnabled);
+    const aiAnalysisEnabled = result.aiAnalysisEnabled !== undefined ? result.aiAnalysisEnabled : true; // Default to true if not set
+    console.log('Setting AI Analysis toggle to:', aiAnalysisEnabled);
+    aiAnalysisToggle.checked = aiAnalysisEnabled;
+    
+    // Update all tabs with the current AI analysis state
+    updateAiAnalysisState(aiAnalysisEnabled);
 
     // Initialize copy preferences (defaults false)
     copyIncludeIndustry.checked = result.copyIncludeIndustry === true;
@@ -699,102 +984,217 @@ document.addEventListener('DOMContentLoaded', function() {
       showErrorMessage('No valid API keys found in the input!');
       return;
     }
-
-    if (keys.length > 10) {
-      showErrorMessage('Too many keys! Please add maximum 10 keys at once.');
-      return;
-    }
-
-    // Show loading state
+    
+    // Show loading state with progress
     const addButton = provider === 'openai' ? document.getElementById('addOpenaiKey') : document.getElementById('addGeminiKey');
     const originalText = addButton.textContent;
-    addButton.textContent = `⏳ Adding ${keys.length} keys...`;
+    addButton.textContent = `⏳ Processing ${keys.length} keys...`;
     addButton.disabled = true;
-
-    let successCount = 0;
-    let errorCount = 0;
-    const errors = [];
-
-    try {
-      for (let i = 0; i < keys.length; i++) {
-        const apiKey = keys[i];
-        
-        // Update progress
-        addButton.textContent = `⏳ Validating ${i + 1}/${keys.length}...`;
-        
-        // Check for duplicates
-        const existingKeys = provider === 'openai' ? openaiKeys : geminiKeys;
-        const isDuplicate = existingKeys.some(key => key.key === apiKey);
-        
-        if (isDuplicate) {
-          errors.push(`Key ${i + 1}: Already exists`);
-          errorCount++;
-          continue;
-        }
     
-    // Test the API key
-        const isValid = await testApiKeyBeforeAdding(provider, apiKey);
-        
-        if (!isValid) {
-          errors.push(`Key ${i + 1}: Invalid key`);
-          errorCount++;
-          continue;
-        }
-
-        // Add the valid key
-        const keyId = Date.now().toString() + '_' + i;
-        const keyData = {
-          id: keyId,
-          key: apiKey,
-          masked: apiKey.substring(0, 12) + '••••••••••••••••••••',
-          status: 'valid',
-          addedAt: new Date().toISOString(),
-          usage: {
-            requestsToday: 0,
-            tokensToday: 0,
-            lastReset: new Date().toDateString(),
-            rateLimitReset: null,
-            isRateLimited: false,
-            costToday: 0
+    // Create progress indicator
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'apiKeyProgress';
+    progressDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 2px solid #007bff;
+      border-radius: 8px;
+      padding: 20px;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      text-align: center;
+      min-width: 300px;
+    `;
+    progressDiv.innerHTML = `
+      <h3>Processing API Keys</h3>
+      <div style="margin: 10px 0;">
+        <div style="background: #f0f0f0; border-radius: 10px; height: 20px; overflow: hidden;">
+          <div id="progressBar" style="background: #007bff; height: 100%; width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <div id="progressText" style="margin-top: 5px; font-size: 14px;">Starting...</div>
+      </div>
+      <div id="progressStats" style="font-size: 12px; color: #666;"></div>
+    `;
+    document.body.appendChild(progressDiv);
+    
+    try {
+      // Listen for progress updates
+      const progressListener = (message) => {
+        if (message.action === 'apiKeyProgress') {
+          const progressBar = document.getElementById('progressBar');
+          const progressText = document.getElementById('progressText');
+          const progressStats = document.getElementById('progressStats');
+          
+          if (progressBar && progressText && progressStats) {
+            progressBar.style.width = `${message.progress}%`;
+            progressText.textContent = `Processing ${message.current}/${message.total} keys...`;
+            progressStats.textContent = `Valid: ${message.valid} | Invalid: ${message.invalid}`;
           }
-        };
-
+        }
+      };
+      
+      chrome.runtime.onMessage.addListener(progressListener);
+      
+      // Send keys to background for processing
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          action: 'processApiKeysInBackground',
+          provider: provider,
+          apiKeys: keys,
+          progressCallback: true
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
+      });
+      
+      // Remove progress listener
+      chrome.runtime.onMessage.removeListener(progressListener);
+      
+      if (response.status === 'complete') {
+        const { results, summary } = response;
+        
+        // Check for duplicates and prepare keys for storage
+        const existingKeys = provider === 'openai' ? openaiKeys : geminiKeys;
+        let addedCount = 0;
+        let duplicateCount = 0;
+        const keysToSave = [];
+        
+        for (const validKey of results.valid) {
+          const isDuplicate = existingKeys.some(key => key.key === validKey);
+          if (!isDuplicate) {
+            const keyId = Date.now().toString() + '_' + addedCount;
+            const keyData = {
+              id: keyId,
+              key: validKey,
+              masked: validKey.substring(0, 12) + '••••••••••••••••••••',
+              status: 'valid',
+              addedAt: new Date().toISOString(),
+              usage: {
+                requestsToday: 0,
+                tokensToday: 0,
+                lastReset: new Date().toDateString(),
+                rateLimitReset: null,
+                isRateLimited: false,
+                costToday: 0
+              }
+            };
+            keysToSave.push(keyData);
+            addedCount++;
+          } else {
+            duplicateCount++;
+          }
+        }
+        
+        // Save to background storage if we have keys to save
+        if (keysToSave.length > 0) {
+          console.log(`Saving ${keysToSave.length} ${provider} keys to background storage...`);
+          try {
+            const saveResponse = await new Promise((resolve, reject) => {
+              chrome.runtime.sendMessage({
+                action: 'saveApiKeysToStorage',
+                provider: provider,
+                keys: keysToSave
+              }, (response) => {
+                if (chrome.runtime.lastError) {
+                  reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                  resolve(response);
+                }
+              });
+            });
+            console.log('Save response from background:', saveResponse);
+          } catch (error) {
+            console.error('Failed to save keys to background storage:', error);
+          }
+        }
+        
+        // Reload API keys from IndexedDB to get the updated list
+        console.log('Reloading API keys from IndexedDB...');
+        const apiKeysData = await loadApiKeysFromStorage();
+        console.log('Reloaded API keys:', {
+          openai: apiKeysData.openaiKeys.length,
+          gemini: apiKeysData.geminiKeys.length
+        });
+        
         if (provider === 'openai') {
-          openaiKeys.push(keyData);
-          if (!selectedOpenaiKey) {
-            selectedOpenaiKey = keyId;
-          }
+          openaiKeys = apiKeysData.openaiKeys;
+          console.log(`Updated openaiKeys array: ${openaiKeys.length} keys`);
         } else {
-          geminiKeys.push(keyData);
-          if (!selectedGeminiKey) {
-            selectedGeminiKey = keyId;
-          }
+          geminiKeys = apiKeysData.geminiKeys;
+          console.log(`Updated geminiKeys array: ${geminiKeys.length} keys`);
         }
         
-        successCount++;
-      }
-
-      // Update UI
-      renderApiKeys();
-      updateApiStats();
-      saveAiSettings();
-
-      // Show results
-      if (successCount > 0 && errorCount === 0) {
-        showSuccessMessage(`Successfully added ${successCount} API key${successCount > 1 ? 's' : ''}!`);
-      } else if (successCount > 0 && errorCount > 0) {
-        showErrorMessage(`Added ${successCount} key${successCount > 1 ? 's' : ''}, ${errorCount} failed. ${errors.join(', ')}`);
+        // Update UI
+        renderApiKeys();
+        updateApiStats();
+        saveAiSettings();
+        
+        // Update progress display with final results
+        const progressText = document.getElementById('progressText');
+        const progressStats = document.getElementById('progressStats');
+        if (progressText && progressStats) {
+          progressText.textContent = 'Processing complete!';
+          progressStats.innerHTML = `
+            <div style="color: #28a745;">✅ Added: ${addedCount}</div>
+            <div style="color: #dc3545;">❌ Invalid: ${summary.invalid}</div>
+            ${duplicateCount > 0 ? `<div style="color: #ffc107;">⚠️ Duplicates: ${duplicateCount}</div>` : ''}
+            ${summary.errors > 0 ? `<div style="color: #ffc107;">⚠️ Errors: ${summary.errors}</div>` : ''}
+          `;
+        }
+        
+        // Show summary message
+        if (addedCount > 0) {
+          showSuccessMessage(`Successfully added ${addedCount} valid ${provider} API keys!`);
+        }
+        if (summary.invalid > 0) {
+          showErrorMessage(`${summary.invalid} invalid keys were skipped.`);
+        }
+        if (duplicateCount > 0) {
+          showErrorMessage(`${duplicateCount} duplicate keys were skipped.`);
+        }
+        if (summary.errors > 0) {
+          showErrorMessage(`${summary.errors} keys had errors during processing.`);
+        }
+        
+        // Auto-close progress dialog after 3 seconds
+        setTimeout(() => {
+          const progressDiv = document.getElementById('apiKeyProgress');
+          if (progressDiv) {
+            progressDiv.remove();
+          }
+        }, 3000);
+        
       } else {
-        showErrorMessage(`Failed to add any keys. ${errors.join(', ')}`);
+        throw new Error(response.error || 'Background processing failed');
       }
-
+      
     } catch (error) {
-      console.error('Error adding multiple API keys:', error);
-      showErrorMessage('Failed to add API keys. Please try again.');
+      console.error('Error processing API keys in background:', error);
+      showErrorMessage('Failed to process API keys. Please try again.');
+      
+      // Remove progress dialog
+      const progressDiv = document.getElementById('apiKeyProgress');
+      if (progressDiv) {
+        progressDiv.remove();
+      }
     } finally {
-      // Reset button state
+      // Restore button state
       addButton.textContent = originalText;
       addButton.disabled = false;
+      
+      // Clear input
+      if (provider === 'openai') {
+        openaiKeyInput.value = '';
+      } else if (provider === 'gemini') {
+        geminiKeyInput.value = '';
+      }
     }
   }
   
@@ -837,6 +1237,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   function renderApiKeys() {
+    console.log('renderApiKeys called:', {
+      currentProvider,
+      openaiKeys: openaiKeys.length,
+      geminiKeys: geminiKeys.length
+    });
+    
     // Only render keys for the currently selected provider
     if (currentProvider === 'openai') {
       // Render OpenAI keys
@@ -922,8 +1328,8 @@ document.addEventListener('DOMContentLoaded', function() {
           } else if (action === 'delete') {
             removeApiKey(provider, keyId);
             }
-          });
-        });
+    });
+  });
     }, 100);
   }
   
@@ -967,30 +1373,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Calculate suggested delay between opening URLs (same logic as content.js)
   function calculateSuggestedUrlDelay() {
-    if (currentProvider !== 'gemini') {
       return 1; // 1 second for OpenAI
-    }
-    
-    const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
-    
-    if (geminiKeyCount <= 1) {
-      return 6; // 6 seconds for single key
-    }
-    
-    // Estimate user might open 30-60 job pages
-    const estimatedPages = 45;
-    
-    // Calculate optimal delay: 60 seconds / estimated pages
-    const totalTimeSeconds = 60;
-    const delayPerPage = totalTimeSeconds / estimatedPages;
-    
-    // Adjust based on number of keys (more keys = can open faster)
-    const adjustedDelay = delayPerPage / Math.sqrt(geminiKeyCount);
-    
-    // Minimum 1 second, maximum 10 seconds
-    const finalDelay = Math.max(1, Math.min(10, adjustedDelay));
-    
-    return Math.round(finalDelay);
   }
   
   function getNextAvailableKey(provider) {
@@ -1091,14 +1474,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  function saveAiSettings() {
-    chrome.storage.sync.set({
-      aiProvider: currentProvider,
-      openaiKeys: openaiKeys,
-      geminiKeys: geminiKeys,
-      selectedOpenaiKey: selectedOpenaiKey,
-      selectedGeminiKey: selectedGeminiKey
-    });
+  async function saveAiSettings() {
+    try {
+      // Save API keys to IndexedDB (primary storage for large numbers)
+      if (openaiKeys.length > 0) {
+        await apiKeyStorage.saveApiKeys('openai', openaiKeys);
+        console.log(`✅ Saved ${openaiKeys.length} OpenAI keys to IndexedDB`);
+      }
+      if (geminiKeys.length > 0) {
+        await apiKeyStorage.saveApiKeys('gemini', geminiKeys);
+        console.log(`✅ Saved ${geminiKeys.length} Gemini keys to IndexedDB`);
+      }
+      
+      console.log('🎉 All API keys saved to IndexedDB successfully:', { 
+        openai: openaiKeys.length, 
+        gemini: geminiKeys.length 
+      });
+      
+      // Save only essential settings to Chrome storage (no API keys)
+      chrome.storage.sync.set({
+        aiProvider: currentProvider,
+        selectedOpenaiKey: selectedOpenaiKey,
+        selectedGeminiKey: selectedGeminiKey
+      }, function() {
+        if (chrome.runtime.lastError) {
+          console.error('⚠️ Failed to save settings to sync storage:', chrome.runtime.lastError);
+        } else {
+          console.log('📦 Saved AI settings to sync storage (no API keys)');
+        }
+        
+        // Notify all tabs that API keys have been updated
+        chrome.tabs.query({}, (tabs) => {
+          tabs.forEach((tab) => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, {
+                action: 'updateApiKeys'
+              }).catch(() => {});
+            }
+          });
+        });
+      });
+      
+    } catch (error) {
+      console.error('Failed to save API keys to IndexedDB:', error);
+      showErrorMessage('Failed to save API keys. Please try again.');
+    }
   }
   
   async function testApiKeyBeforeAdding(provider, apiKey) {

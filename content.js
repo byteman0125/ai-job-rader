@@ -23,6 +23,7 @@ let isRequestInProgress = false; // Prevent multiple simultaneous requests
 let blockedRequests = 0; // Track blocked requests
 let jobRadarEnabled = true; // Default to enabled
 let coverLetterEnabled = false; // Default to disabled
+let aiAnalysisEnabled = true; // Default to enabled
 let userLocation = null;
 let userWorkExperience = null;
 
@@ -158,8 +159,206 @@ const defaultKeywords = [
   { text: 'relocate', color: 'red' }
 ];
 
+// IndexedDB Storage Manager for large numbers of API keys
+class ApiKeyStorageManager {
+  constructor() {
+    this.dbName = 'JobRadarApiKeys';
+    this.dbVersion = 1;
+    this.db = null;
+  }
+
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve(this.db);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        // Create object stores for API keys
+        if (!db.objectStoreNames.contains('openaiKeys')) {
+          const openaiStore = db.createObjectStore('openaiKeys', { keyPath: 'id' });
+          openaiStore.createIndex('key', 'key', { unique: true });
+          openaiStore.createIndex('status', 'status');
+        }
+        
+        if (!db.objectStoreNames.contains('geminiKeys')) {
+          const geminiStore = db.createObjectStore('geminiKeys', { keyPath: 'id' });
+          geminiStore.createIndex('key', 'key', { unique: true });
+          geminiStore.createIndex('status', 'status');
+        }
+      };
+    });
+  }
+
+  async loadApiKeys(provider) {
+    if (!this.db) await this.init();
+    
+    const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+    const transaction = this.db.transaction([storeName], 'readonly');
+    const store = transaction.objectStore(storeName);
+    
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+}
+
+// Initialize storage manager
+const apiKeyStorage = new ApiKeyStorageManager();
+
+// Global flags to prevent multiple initializations
+let isIndexedDBInitialized = false;
+let isMigrationRunning = false;
+
+// Global page counter for sequential key rotation
+let globalPageCounter = 0;
+
+// Function to get next key index for sequential rotation
+function getNextKeyIndex(totalKeys) {
+  globalPageCounter++;
+  const keyIndex = globalPageCounter % totalKeys;
+  console.log(`🔄 Sequential rotation: Page #${globalPageCounter} → Key index ${keyIndex} (${totalKeys} total keys)`);
+  return keyIndex;
+}
+
+// Function to reset page counter (useful for testing)
+function resetPageCounter() {
+  globalPageCounter = 0;
+  console.log('🔄 Page counter reset to 0');
+}
+
+// Check if this is a duplicate content script instance
+if (window.jobRadarContentScriptLoaded) {
+  console.log('⏸️ Content script already loaded on this page, skipping initialization');
+  // Still need to initialize IndexedDB for this instance
+  apiKeyStorage.init().then(() => {
+    isIndexedDBInitialized = true;
+    console.log('✅ Content script: IndexedDB initialized (duplicate instance)');
+  }).catch((error) => {
+    console.error('❌ Content script: Failed to initialize IndexedDB (duplicate instance):', error);
+  });
+} else {
+  window.jobRadarContentScriptLoaded = true;
+}
+
+// Initialize IndexedDB
+apiKeyStorage.init().then(() => {
+  isIndexedDBInitialized = true;
+  console.log('✅ Content script: IndexedDB initialized');
+}).catch((error) => {
+  console.error('❌ Content script: Failed to initialize IndexedDB:', error);
+});
+
+// One-time migration from Chrome storage to IndexedDB (if needed)
+async function oneTimeMigrationToIndexedDB() {
+  // Prevent multiple migrations from running simultaneously
+  if (isMigrationRunning) {
+    console.log('⏸️ Content script: Migration already running, skipping...');
+    return;
+  }
+  
+  isMigrationRunning = true;
+  
+  try {
+    // Ensure IndexedDB is initialized
+    if (!isIndexedDBInitialized && !apiKeyStorage.db) {
+      console.log('🔄 Content script: Initializing IndexedDB for migration...');
+      await apiKeyStorage.init();
+      isIndexedDBInitialized = true;
+    }
+    
+    // Check if IndexedDB already has keys
+    const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
+      apiKeyStorage.loadApiKeys('openai'),
+      apiKeyStorage.loadApiKeys('gemini')
+    ]);
+    
+    // If IndexedDB already has keys, no migration needed
+    if (indexedOpenaiKeys.length > 0 || indexedGeminiKeys.length > 0) {
+      console.log('✅ Content script: IndexedDB already has API keys, no migration needed');
+      return;
+    }
+    
+    // Check Chrome storage for existing keys
+    const [localData, syncData] = await Promise.all([
+      new Promise(resolve => chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve)),
+      new Promise(resolve => chrome.storage.sync.get(['openaiKeys', 'geminiKeys'], resolve))
+    ]);
+    
+    const openaiKeysLocal = localData.openaiKeys || [];
+    const geminiKeysLocal = localData.geminiKeys || [];
+    const openaiKeysSync = syncData.openaiKeys || [];
+    const geminiKeysSync = syncData.geminiKeys || [];
+    
+    // Use local storage if available, otherwise sync
+    const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
+    const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
+    
+    // Migrate to IndexedDB if we found keys in Chrome storage
+    if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
+      console.log('🔄 Content script: One-time migration - Moving API keys from Chrome storage to IndexedDB...');
+      
+      if (mergedOpenaiKeys.length > 0) {
+        await apiKeyStorage.saveApiKeys('openai', mergedOpenaiKeys);
+        console.log(`✅ Content script: Migrated ${mergedOpenaiKeys.length} OpenAI keys to IndexedDB`);
+      }
+      if (mergedGeminiKeys.length > 0) {
+        await apiKeyStorage.saveApiKeys('gemini', mergedGeminiKeys);
+        console.log(`✅ Content script: Migrated ${mergedGeminiKeys.length} Gemini keys to IndexedDB`);
+      }
+      
+      console.log('🎉 Content script: One-time migration completed successfully!');
+    }
+    
+  } catch (error) {
+    console.error('❌ Content script: One-time migration failed:', error);
+  } finally {
+    // Always reset the migration flag
+    isMigrationRunning = false;
+  }
+}
+
+// Load API keys from IndexedDB only (pure IndexedDB system)
+async function loadApiKeysFromStorage() {
+  try {
+    // Ensure IndexedDB is initialized
+    if (!isIndexedDBInitialized && !apiKeyStorage.db) {
+      console.log('🔄 Content script: Initializing IndexedDB for loading keys...');
+      await apiKeyStorage.init();
+      isIndexedDBInitialized = true;
+    }
+    
+    // Load directly from IndexedDB (only storage system)
+    const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
+      apiKeyStorage.loadApiKeys('openai'),
+      apiKeyStorage.loadApiKeys('gemini')
+    ]);
+    
+    console.log('✅ Content script loaded API keys from IndexedDB:', {
+      openai: indexedOpenaiKeys.length,
+      gemini: indexedGeminiKeys.length
+    });
+    
+    return {
+      openaiKeys: indexedOpenaiKeys,
+      geminiKeys: indexedGeminiKeys
+    };
+  } catch (error) {
+    console.error('❌ Content script: Error loading API keys from IndexedDB:', error);
+    return { openaiKeys: [], geminiKeys: [] };
+  }
+}
+
 // Load settings from storage including badge position
-chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'userLocation', 'workExperience', 'coverLetterEnabled'], (result) => {
+chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'userLocation', 'workExperience', 'coverLetterEnabled', 'aiAnalysisEnabled'], async (result) => {
 
   if (result.keywords && result.keywords.length > 0) {
     keywords = result.keywords;
@@ -171,32 +370,79 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys'
 
   // Load AI settings
   aiProvider = result.aiProvider || 'openai';
-  openaiKeys = result.openaiKeys || [];
-  geminiKeys = result.geminiKeys || [];
-  selectedOpenaiKey = result.selectedOpenaiKey || null;
-  selectedGeminiKey = result.selectedGeminiKey || null;
   
-  // Migration: Handle old single API key format
-  if (result.openaiApiKey && openaiKeys.length === 0) {
-    // The popup will handle the migration, just use the old key temporarily
-    console.log('Using old OpenAI API key temporarily until migration completes...');
-    const keyId = 'migrated_' + Date.now().toString();
-    const keyData = {
-      id: keyId,
-      key: result.openaiApiKey,
-      masked: result.openaiApiKey.substring(0, 12) + '••••••••••••••••••••',
-      status: 'unknown',
-      addedAt: new Date().toISOString(),
-      usage: {
-        requestsToday: 0,
-        tokensToday: 0,
-        lastReset: new Date().toDateString(),
-        rateLimitReset: null,
-        isRateLimited: false
+  // Run one-time migration from Chrome storage to IndexedDB (if needed)
+  await oneTimeMigrationToIndexedDB();
+  
+  // Load API keys from background script (which has access to the same IndexedDB)
+  console.log('Content script: Loading API keys from background script...');
+  chrome.runtime.sendMessage({ action: 'getApiKeys' }, (response) => {
+    if (response && response.success) {
+      openaiKeys = response.openaiKeys || [];
+      geminiKeys = response.geminiKeys || [];
+      
+      // Debug: Log what we loaded
+      console.log('Content script loaded API keys from background:', {
+        openai: openaiKeys.length,
+        gemini: geminiKeys.length,
+        aiProvider: aiProvider,
+        hasValidKeys: (openaiKeys.length > 0 && aiProvider === 'openai') || (geminiKeys.length > 0 && aiProvider === 'gemini')
+      });
+      
+      // Auto-select a key if none is selected but we have valid keys
+      if (!selectedOpenaiKey && openaiKeys.length > 0) {
+        const firstValidKey = openaiKeys.find(key => key.status === 'valid');
+        if (firstValidKey) {
+          selectedOpenaiKey = firstValidKey.id;
+          console.log('Auto-selected OpenAI key:', firstValidKey.masked);
+        }
       }
-    };
-    openaiKeys.push(keyData);
-    selectedOpenaiKey = keyId;
+      
+      if (!selectedGeminiKey && geminiKeys.length > 0) {
+        const firstValidKey = geminiKeys.find(key => key.status === 'valid');
+        if (firstValidKey) {
+          selectedGeminiKey = firstValidKey.id;
+          console.log('Auto-selected Gemini key:', firstValidKey.masked);
+        }
+      }
+      
+      // Continue with the rest of the initialization
+      continueInitialization();
+    } else {
+      console.error('Content script: Failed to load API keys from background:', response);
+      // Fallback to empty arrays
+      openaiKeys = [];
+      geminiKeys = [];
+      continueInitialization();
+    }
+  });
+  
+  // Function to continue initialization after API keys are loaded
+  function continueInitialization() {
+    selectedOpenaiKey = result.selectedOpenaiKey || null;
+    selectedGeminiKey = result.selectedGeminiKey || null;
+    
+    // Migration: Handle old single API key format
+    if (result.openaiApiKey && openaiKeys.length === 0) {
+      // The popup will handle the migration, just use the old key temporarily
+      console.log('Using old OpenAI API key temporarily until migration completes...');
+      const keyId = 'migrated_' + Date.now().toString();
+      const keyData = {
+        id: keyId,
+        key: result.openaiApiKey,
+        masked: result.openaiApiKey.substring(0, 12) + '••••••••••••••••••••',
+        status: 'unknown',
+        addedAt: new Date().toISOString(),
+        usage: {
+          requestsToday: 0,
+          tokensToday: 0,
+          lastReset: new Date().toDateString(),
+          rateLimitReset: null,
+          isRateLimited: false
+        }
+      };
+      openaiKeys.push(keyData);
+      selectedOpenaiKey = keyId;
   }
   
   // Load user profile data
@@ -207,9 +453,12 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys'
   if (result.workExperience) {
     userWorkExperience = result.workExperience;
   }
-  
-  // Load cover letter toggle state (default to disabled)
-  coverLetterEnabled = result.coverLetterEnabled === true;
+    
+    // Load cover letter toggle state (default to disabled)
+    coverLetterEnabled = result.coverLetterEnabled === true;
+    
+    // Load AI analysis toggle state (default to enabled)
+    aiAnalysisEnabled = result.aiAnalysisEnabled !== undefined ? result.aiAnalysisEnabled : true;
 
   initializeHighlighter();
 
@@ -219,6 +468,7 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys'
       initializeBadgePosition(result.badgePosition);
     }
   }, 100);
+  }
 });
 
 // Listen for updates
@@ -309,6 +559,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Update cover letter section visibility immediately
     updateCoverLetterSectionVisibility();
+  } else if (request.action === 'updateAiAnalysisState') {
+    aiAnalysisEnabled = request.enabled;
+    
+    // If AI analysis is disabled, stop any ongoing extraction
+    if (!aiAnalysisEnabled && isRequestInProgress) {
+      isRequestInProgress = false;
+      console.log('AI Analysis disabled - stopping job extraction');
+    }
+  } else if (request.action === 'updateApiKeys') {
+    // Get API keys from background script (which has access to the same IndexedDB)
+    console.log('Content script: Received updateApiKeys message, getting keys from background...');
+    chrome.runtime.sendMessage({ action: 'getApiKeys' }, (response) => {
+      if (response && response.success) {
+        openaiKeys = response.openaiKeys || [];
+        geminiKeys = response.geminiKeys || [];
+        console.log('Content script: API keys received from background:', { 
+          openai: openaiKeys.length, 
+          gemini: geminiKeys.length,
+          aiProvider: aiProvider
+        });
+        
+        // Auto-select a key if none is selected but we have valid keys
+        if (!selectedOpenaiKey && openaiKeys.length > 0) {
+          const firstValidKey = openaiKeys.find(key => key.status === 'valid');
+          if (firstValidKey) {
+            selectedOpenaiKey = firstValidKey.id;
+            console.log('Content script: Auto-selected OpenAI key:', firstValidKey.masked);
+          }
+        }
+        
+        if (!selectedGeminiKey && geminiKeys.length > 0) {
+          const firstValidKey = geminiKeys.find(key => key.status === 'valid');
+          if (firstValidKey) {
+            selectedGeminiKey = firstValidKey.id;
+            console.log('Content script: Auto-selected Gemini key:', firstValidKey.masked);
+          }
+        }
+        
+        // Check if we have valid keys for the current provider
+        const hasValidKeys = (openaiKeys.length > 0 && aiProvider === 'openai') || 
+                            (geminiKeys.length > 0 && aiProvider === 'gemini');
+        
+        console.log('Content script: Has valid keys for current provider:', hasValidKeys);
+        
+        // Update badge to reflect new API key status
+        updateBadge();
+        
+        if (hasValidKeys) {
+          console.log('Content script: Valid API keys found, badge should be updated');
+        } else {
+          console.log('Content script: No valid keys found for provider:', aiProvider);
+        }
+      } else {
+        console.error('Content script: Failed to get API keys from background:', response);
+      }
+    });
   } else if (request.action === 'updateKeywordColor') {
     // Update keyword color in existing highlights
     const keyword = request.keyword;
@@ -343,7 +649,7 @@ function getPageLoadStatus() {
   } else if (loadAttempts >= 8) {
       return `⚠️ Max Attempts Reached (${loadAttempts}/8) - 30s elapsed - Click 🔄 to retry`;
   } else if (loadAttempts > 0) {
-    const elapsedSeconds = Math.floor(loadAttempts * 4);
+    const elapsedSeconds = Math.floor(loadAttempts * 8);
     return `🔄 Page Loading... (${loadAttempts}/8) - ${elapsedSeconds}s elapsed`;
   } else {
     return '✅ Page Ready';
@@ -365,14 +671,30 @@ function retryJobExtraction() {
 
 // Manual job info extraction
 function manualExtractJobInfo() {
+  // Check if AI Analysis is enabled
+  if (!aiAnalysisEnabled) {
+    console.log('⏸️ Manual job extraction skipped - AI Analysis is disabled');
+    return;
+  }
+  
   // Check if we have a valid API key for the current provider
   let hasValidApiKey = false;
-  if (aiProvider === 'openai' && selectedOpenaiKey) {
-    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
-    hasValidApiKey = key && key.status === 'valid';
-  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
-    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
-    hasValidApiKey = key && key.status === 'valid';
+  if (aiProvider === 'openai') {
+    // Check if we have any valid OpenAI keys
+    hasValidApiKey = openaiKeys.some(key => key.status === 'valid');
+    // If we have a selected key, prefer that one
+    if (selectedOpenaiKey) {
+      const selectedKey = openaiKeys.find(k => k.id === selectedOpenaiKey);
+      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
+    }
+  } else if (aiProvider === 'gemini') {
+    // Check if we have any valid Gemini keys
+    hasValidApiKey = geminiKeys.some(key => key.status === 'valid');
+    // If we have a selected key, prefer that one
+    if (selectedGeminiKey) {
+      const selectedKey = geminiKeys.find(k => k.id === selectedGeminiKey);
+      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
+    }
   }
   
   if (!hasValidApiKey) {
@@ -440,12 +762,13 @@ function updateExtractionProgress() {
 
 // Start continuous job extraction with smart delay system
 function startContinuousJobExtraction() {
+  console.log(`🚀🚀🚀 START CONTINUOUS JOB EXTRACTION CALLED 🚀🚀🚀`);
   console.log(`🚀 Starting continuous job extraction at ${new Date().toLocaleTimeString()}`);
   
   let attempts = 0;
   // Adjust interval based on provider to respect rate limits
-  const interval = aiProvider === 'gemini' ? 6000 : 4000; // 6 seconds for Gemini (RPM limit), 4 seconds for OpenAI
-  const maxAttempts = aiProvider === 'gemini' ? 5 : 8; // Fewer attempts for Gemini due to longer interval
+  const interval = aiProvider === 'gemini' ? 6000 : 600; // 6 seconds for Gemini (RPM limit), 4 seconds for OpenAI
+  const maxAttempts = aiProvider === 'gemini' ? 6 : 6; // Fewer attempts for Gemini due to longer interval
     
     // Clear any existing interval to prevent multiple intervals
     if (window.extractionInterval) {
@@ -459,12 +782,14 @@ function startContinuousJobExtraction() {
   
   // Function to run extraction attempt
   const runExtractionAttempt = () => {
+    console.log(`🔄 runExtractionAttempt called (attempt ${attempts + 1})`);
     attempts++;
     
     // Update badge to show progress
     loadAttempts = attempts;
     updateBadge();
     
+    console.log(`🔄 About to call extractJobInfo...`);
     // Try to extract job info
     extractJobInfo().then(() => {
       // If successful, stop the interval
@@ -504,35 +829,7 @@ function startContinuousJobExtraction() {
 
 // Calculate smart delay based on number of keys and estimated job pages
 function calculateSmartDelay() {
-  if (aiProvider !== 'gemini') {
-    // For OpenAI, use minimal delay (2 seconds)
-    return 2000;
-  }
-  
-  const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
-  
-  if (geminiKeyCount <= 1) {
-    // Single key, use standard delay
-    return 3000;
-  }
-  
-  // Estimate number of job pages user might open
-  // Assume user might open 10-60 job pages
-  const estimatedJobPages = 30; // Conservative estimate
-  
-  // Calculate delay: 60 seconds / estimated pages / number of keys
-  // This ensures keys are distributed across time
-  const totalDelaySeconds = 60;
-  const delayPerPage = (totalDelaySeconds * 1000) / estimatedJobPages;
-  const delayPerKey = delayPerPage / geminiKeyCount;
-  
-  // Add some randomization to prevent all pages from syncing
-  const randomFactor = 0.5 + Math.random(); // 0.5 to 1.5
-  const finalDelay = Math.max(1000, delayPerKey * randomFactor); // Minimum 1 second
-  
-  console.log(`📊 Smart delay calculation: ${geminiKeyCount} keys, ~${estimatedJobPages} pages, ${finalDelay.toFixed(0)}ms delay`);
-  
-  return Math.round(finalDelay);
+  return 500;
 }
 
 // Start continuous keyword monitoring every 2 seconds for up to 30 seconds
@@ -638,6 +935,11 @@ function detectJobSite() {
 async function getAvailableApiKey() {
   const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
   
+  console.log(`🔍 getAvailableApiKey called for ${aiProvider}:`, {
+    totalKeys: keys.length,
+    keys: keys.map(k => ({ id: k.id, masked: k.masked, status: k.status, isRateLimited: k.usage?.isRateLimited }))
+  });
+  
   if (aiProvider === 'openai') {
     // For OpenAI: Use the selected key (no auto-rotation needed)
     const selectedKey = keys.find(key => key.id === selectedOpenaiKey);
@@ -663,45 +965,142 @@ async function getAvailableApiKey() {
       (key.usage?.requestsToday || 0) < 250 && (key.usage?.tokensToday || 0) < 250000
     );
     
+    console.log(`🔍 Gemini key filtering:`, {
+      totalKeys: keys.length,
+      availableKeys: availableKeys.length,
+      availableKeysDetails: availableKeys.map(k => ({ 
+        id: k.id, 
+        masked: k.masked, 
+        status: k.status, 
+        isRateLimited: k.usage?.isRateLimited,
+        requestsToday: k.usage?.requestsToday || 0,
+        tokensToday: k.usage?.tokensToday || 0
+      }))
+    });
+    
+    // Show auto-rotation summary
+    console.log(`🔄 Auto-rotation summary:`, {
+      totalKeys: keys.length,
+      availableKeys: availableKeys.length,
+      rateLimitedKeys: keys.filter(k => k.usage?.isRateLimited).length,
+      exhaustedKeys: keys.filter(k => (k.usage?.requestsToday || 0) >= 250).length,
+      currentPage: window.location.href,
+      globalPageCounter: globalPageCounter,
+      rotationType: 'Sequential (openedCount + 1) % numberOfKeys'
+    });
+    
     if (availableKeys.length === 0) {
+      console.log('❌ No available Gemini keys found');
       return null;
     }
     
-    // Use page-based key distribution for multiple job pages
-    const assignedKey = getPageAssignedKey(availableKeys);
-    
-    if (assignedKey) {
-      console.log(`🎯 Using page-assigned Gemini key: ${assignedKey.masked} (${assignedKey.usage?.requestsToday || 0}/250 requests today)`);
-      return assignedKey;
+    // Use pre-assigned key distribution for multiple job pages
+    try {
+      const assignedKey = await getPreAssignedKey(availableKeys);
+      
+      if (assignedKey) {
+        console.log(`🎯 Using pre-assigned Gemini key: ${assignedKey.masked} (${assignedKey.usage?.requestsToday || 0}/250 requests today)`);
+        console.log(`🔄 Pre-assignment: Using key ${assignedKey.id} for page ${window.location.href}`);
+        return assignedKey;
+      }
+    } catch (error) {
+      console.error('Error in pre-assignment:', error);
     }
     
     // Fallback to least usage if no page assignment
-    const keyWithLeastUsage = availableKeys.reduce((least, current) => {
-      const leastUsage = least.usage?.requestsToday || 0;
-      const currentUsage = current.usage?.requestsToday || 0;
-      return currentUsage < leastUsage ? current : least;
-    });
+    try {
+      const keyWithLeastUsage = availableKeys.reduce((least, current) => {
+        const leastUsage = least.usage?.requestsToday || 0;
+        const currentUsage = current.usage?.requestsToday || 0;
+        return currentUsage < leastUsage ? current : least;
+      });
+      
+      console.log(`🔄 Fallback to Gemini key with least usage: ${keyWithLeastUsage.masked} (${keyWithLeastUsage.usage?.requestsToday || 0}/250 requests today)`);
+      console.log(`🔄 Auto-rotation: Fallback assigned key ${keyWithLeastUsage.id} to page ${window.location.href}`);
+      return keyWithLeastUsage;
+    } catch (error) {
+      console.error('Error in fallback selection:', error);
+    }
     
-    console.log(`🔄 Fallback to Gemini key with least usage: ${keyWithLeastUsage.masked} (${keyWithLeastUsage.usage?.requestsToday || 0}/250 requests today)`);
-    return keyWithLeastUsage;
+    // Final fallback: just return the first available key
+    if (availableKeys.length > 0) {
+      console.log(`🚨 Final fallback: Using first available Gemini key: ${availableKeys[0].masked}`);
+      console.log(`🔄 Auto-rotation: Final fallback assigned key ${availableKeys[0].id} to page ${window.location.href}`);
+      return availableKeys[0];
+    }
   }
 }
 
-// Assign specific keys to specific pages for load distribution
-function getPageAssignedKey(availableKeys) {
+// Get pre-assigned key for this URL from background script
+async function getPreAssignedKey(availableKeys) {
   if (availableKeys.length <= 1) {
     return availableKeys[0];
   }
   
-  // Use URL hash to consistently assign the same key to the same page
-  const currentUrl = window.location.href;
-  const urlHash = hashString(currentUrl);
+  try {
+    // Get URL-key assignments from background script
+    const result = await chrome.storage.local.get(['urlKeyAssignments', 'urlKeyAssignmentsTimestamp']);
+    const assignments = result.urlKeyAssignments || [];
+    const timestamp = result.urlKeyAssignmentsTimestamp || 0;
+    
+    // Check if assignments are recent (within last 5 minutes)
+    const isRecent = (Date.now() - timestamp) < 5 * 60 * 1000;
+    
+    if (assignments.length > 0 && isRecent) {
+      // Find assignment for current URL
+      const currentUrl = window.location.href;
+      const assignment = assignments.find(a => a.url === currentUrl);
+      
+      if (assignment && assignment.keyId) {
+        // Find the assigned key in available keys
+        const assignedKey = availableKeys.find(key => key.id === assignment.keyId);
+        
+        if (assignedKey) {
+          console.log(`🔑 Pre-assigned key found:`, {
+            currentUrl: currentUrl,
+            urlNumber: assignment.urlNumber,
+            keyIndex: assignment.keyIndex,
+            assignedKey: assignedKey.masked,
+            keyId: assignedKey.id,
+            usage: `${assignedKey.usage?.requestsToday || 0}/250 requests`
+          });
+          return assignedKey;
+        } else {
+          console.log(`⚠️ Pre-assigned key ${assignment.keyId} not found in available keys, falling back to sequential`);
+        }
+      } else {
+        console.log(`⚠️ No pre-assignment found for URL: ${currentUrl}, falling back to sequential`);
+      }
+    } else {
+      console.log(`⚠️ No recent URL-key assignments found, falling back to sequential`);
+    }
+  } catch (error) {
+    console.error('Error getting pre-assigned key:', error);
+  }
   
-  // Convert hash to index (0 to availableKeys.length-1)
-  const keyIndex = urlHash % availableKeys.length;
+  // Fallback to sequential rotation if pre-assignment fails
+  return getSequentialAssignedKey(availableKeys);
+}
+
+// Fallback: Assign keys sequentially for load distribution across multiple pages
+function getSequentialAssignedKey(availableKeys) {
+  if (availableKeys.length <= 1) {
+    return availableKeys[0];
+  }
+  
+  // Use sequential rotation: (openedCount + 1) % numberOfKeys
+  const keyIndex = getNextKeyIndex(availableKeys.length);
   const assignedKey = availableKeys[keyIndex];
   
-  console.log(`🔑 Page assignment: URL hash ${urlHash} → Key index ${keyIndex} → ${assignedKey.masked}`);
+  console.log(`🔑 Sequential assignment details:`, {
+    currentUrl: window.location.href,
+    pageCounter: globalPageCounter,
+    keyIndex: keyIndex,
+    totalKeys: availableKeys.length,
+    assignedKey: assignedKey.masked,
+    keyId: assignedKey.id,
+    usage: `${assignedKey.usage?.requestsToday || 0}/250 requests`
+  });
   
   return assignedKey;
 }
@@ -831,37 +1230,14 @@ function enforceUrlDelay(delayMs) {
     
     // Now allow job extraction to proceed
     console.log(`✅ Delay completed, job extraction can proceed`);
+    console.log(`🚀 Calling startContinuousJobExtraction after delay...`);
+    startContinuousJobExtraction();
   }, delayMs);
 }
 
 // Calculate suggested delay between opening URLs
 function calculateSuggestedUrlDelay() {
-  if (aiProvider !== 'gemini') {
     return 1000; // 1 second for OpenAI
-  }
-  
-  const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
-  
-  if (geminiKeyCount <= 1) {
-    return 6000; // 6 seconds for single key
-  }
-  
-  // Estimate user might open 30-60 job pages
-  const estimatedPages = 45;
-  
-  // Calculate optimal delay: 60 seconds / estimated pages
-  const totalTimeSeconds = 60;
-  const delayPerPage = (totalTimeSeconds * 1000) / estimatedPages;
-  
-  // Adjust based on number of keys (more keys = can open faster)
-  const adjustedDelay = delayPerPage / Math.sqrt(geminiKeyCount);
-  
-  // Minimum 1 second, maximum 10 seconds
-  const finalDelay = Math.max(1000, Math.min(10000, adjustedDelay));
-  
-  console.log(`📊 URL delay calculation: ${geminiKeyCount} keys, ~${estimatedPages} pages, ${finalDelay.toFixed(0)}ms delay`);
-  
-  return Math.round(finalDelay);
 }
 
 // Show timing suggestion in badge
@@ -917,6 +1293,12 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
     key.usage.requestsToday += 1;
     key.usage.tokensToday += tokensUsed;
     
+    console.log(`📊 Updated usage for ${key.masked}:`, {
+      requestsToday: key.usage.requestsToday,
+      tokensToday: key.usage.tokensToday,
+      tokensUsed: tokensUsed
+    });
+    
     // Calculate cost for OpenAI (GPT-4 pricing: $0.03/1K input tokens, $0.06/1K output tokens)
     if (aiProvider === 'openai' && tokensUsed > 0) {
       // Estimate: assume 70% input tokens, 30% output tokens for job extraction
@@ -942,38 +1324,92 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
       }
     }
     
-    // Save updated usage to storage
-    chrome.storage.sync.set({
-      [aiProvider === 'openai' ? 'openaiKeys' : 'geminiKeys']: keys
-    });
+    // Save updated usage to IndexedDB
+    try {
+      // Ensure IndexedDB is initialized
+      if (!isIndexedDBInitialized && !apiKeyStorage.db) {
+        console.log('🔄 Content script: Initializing IndexedDB for saving usage...');
+        await apiKeyStorage.init();
+        isIndexedDBInitialized = true;
+      }
+      
+      await apiKeyStorage.saveApiKeys(aiProvider, keys);
+      console.log(`💾 Updated usage saved to IndexedDB for ${aiProvider} key: ${key.masked}`);
+      
+      // Notify popup that usage has been updated
+      chrome.runtime.sendMessage({
+        action: 'updateApiKeys'
+      }).catch(() => {
+        // Ignore errors if popup is not open
+      });
+    } catch (error) {
+      console.error('Failed to save usage to IndexedDB:', error);
+    }
   }
 }
 
 async function extractJobInfo() {
+  console.log('🚀🚀🚀 EXTRACT JOB INFO FUNCTION CALLED 🚀🚀🚀');
+  console.log('🚀 extractJobInfo function called');
+  
   if (!isJobSite) {
+    console.log('❌ Not a job site, returning');
     return;
   }
+  console.log('✅ Job site detected');
+  
+  // Check if AI Analysis is enabled
+  if (!aiAnalysisEnabled) {
+    console.log('⏸️ Job extraction skipped - AI Analysis is disabled');
+    return;
+  }
+  console.log('✅ AI Analysis is enabled');
   
   // Check if we're in a delay period
   if (urlOpeningTracker.isDelaying) {
     console.log(`⏸️ Job extraction blocked - waiting for URL delay to complete`);
     return;
   }
+  console.log('✅ No URL delay active');
   
   // Get an available API key (not rate limited)
   let currentApiKey = null;
   let currentKeyId = null;
   
+  console.log('🔍 About to call getAvailableApiKey...');
   const availableKey = await getAvailableApiKey();
+  console.log('🔍 getAvailableApiKey returned:', availableKey);
+  
   if (availableKey) {
     currentApiKey = availableKey.key;
     currentKeyId = availableKey.id;
-    console.log(`Using available key: ${availableKey.masked}`);
+    console.log(`✅ Using available key: ${availableKey.masked}`);
   } else {
-    console.log('All API keys are rate limited or exhausted');
-    updateBadge('All keys limited', '#ff6b6b');
-    return;
+    console.log('❌ getAvailableApiKey returned null, trying simple fallback...');
+    
+    // Simple fallback: just use the first valid key
+    const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+    const firstValidKey = keys.find(key => key.status === 'valid');
+    
+    if (firstValidKey) {
+      currentApiKey = firstValidKey.key;
+      currentKeyId = firstValidKey.id;
+      console.log(`🚨 Fallback: Using first valid key: ${firstValidKey.masked}`);
+    } else {
+      console.log('❌ No valid keys found at all');
+      console.log('Available keys check:', {
+        aiProvider,
+        openaiKeys: openaiKeys.length,
+        geminiKeys: geminiKeys.length,
+        selectedOpenaiKey,
+        selectedGeminiKey,
+        allKeys: keys.map(k => ({ id: k.id, status: k.status, masked: k.masked }))
+      });
+      updateBadge('No valid keys', '#ff6b6b');
+      return;
+    }
   }
+  console.log('✅ API key selection completed');
   
   // Prevent multiple simultaneous requests
   if (isRequestInProgress) {
@@ -981,10 +1417,22 @@ async function extractJobInfo() {
     console.log(`⏸️ Request already in progress, skipping... (${blockedRequests} blocked)`);
     return;
   }
+  console.log('✅ No request in progress, proceeding');
   
   // Set request lock
   isRequestInProgress = true;
   console.log(`🔒 Starting job extraction attempt ${loadAttempts}/${maxLoadAttempts} at ${new Date().toLocaleTimeString()}`);
+  console.log(`🔒 Request lock set, isRequestInProgress: ${isRequestInProgress}`);
+  
+  // Safety check: prevent infinite loops
+  if (loadAttempts > maxLoadAttempts) {
+    console.error(`❌ Maximum attempts (${maxLoadAttempts}) reached, stopping extraction`);
+    isRequestInProgress = false;
+    loadFailed = true;
+    lastLoadError = 'Maximum attempts reached';
+    updateBadge();
+    return;
+  }
   
       // Check RPM limit for Gemini only (OpenAI has no RPM limits)
     if (aiProvider === 'gemini') {
@@ -1014,22 +1462,33 @@ async function extractJobInfo() {
         key.usage.requestsInLastMinute.push(now);
       }
     }
+  console.log('✅ RPM check completed');
   
   loadAttempts++;
+  console.log(`📊 Load attempts: ${loadAttempts}/${maxLoadAttempts}`);
 
   
   try {  
+    console.log('🔍 Collecting job elements...');
     const jobElements = collectJobElements();
     let pageContent = '';
      pageContent = jobElements;
+     console.log(`📄 Collected page content: ${pageContent.length} characters`);
      
      // Validate that we have content
      if (!pageContent || pageContent.trim().length === 0) {
        console.error('❌ No page content found');
+       console.error('❌ Page content details:', { 
+         hasContent: !!pageContent, 
+         contentLength: pageContent?.length || 0,
+         trimmedLength: pageContent?.trim().length || 0
+       });
        lastLoadError = 'No page content available';
        updateBadge();
        return;
      }
+     
+     console.log('✅ Page content validation passed');
      
     //  Truncate content to prevent API errors (keep first 50000 characters for GPT-4 Turbo)
      if (pageContent.length > 50000) {
@@ -1044,8 +1503,11 @@ async function extractJobInfo() {
        console.log('⏰ Request timeout - aborting');
      }, 15000); // 15 second timeout
     
+    console.log(`🚀 Making API call to ${aiProvider}...`);
+    console.log(`🔑 Using API key: ${currentApiKey ? currentApiKey.substring(0, 20) + '...' : 'NULL'}`);
     let response;
     if (aiProvider === 'openai') {
+      console.log('📡 Calling OpenAI API...');
       response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -1187,7 +1649,8 @@ User Location: ${userLocation || 'Not specified'}`
     });
     } else {
       // Gemini API call
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
+      console.log('📡 Calling Gemini API...');
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${currentApiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1324,7 +1787,10 @@ User Location: ${userLocation || 'Not specified'}`
     
     clearTimeout(timeoutId); // Clear timeout if successful
     
+    console.log(`📥 API Response received: ${response.status} ${response.statusText}`);
+    
     if (response.ok) {
+      console.log('✅ API call successful, parsing response...');
       const data = await response.json();
       let content;
       
@@ -1428,7 +1894,9 @@ User Location: ${userLocation || 'Not specified'}`
       }
     } else {
       // API request failed
+      console.log(`❌ API request failed: ${response.status} ${response.statusText}`);
       const errorText = await response.text();
+      console.log('Error response:', errorText);
       
       // Handle rate limiting (only for Gemini)
       if (response.status === 429 && aiProvider === 'gemini') {
@@ -1475,6 +1943,11 @@ User Location: ${userLocation || 'Not specified'}`
     // Always unlock the request when done (success or failure)
     isRequestInProgress = false;
     console.log('🔓 Request lock released');
+    
+    // Clear timeout if it was set
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -1833,6 +2306,12 @@ function removeHighlights() {
 
 // Generate cover letter using AI
 async function generateCoverLetter() {
+  // Check if AI Analysis is enabled
+  if (!aiAnalysisEnabled) {
+    console.log('⏸️ Cover letter generation skipped - AI Analysis is disabled');
+    return;
+  }
+  
   const promptTextarea = document.querySelector('.cover-letter-prompt');
   const generateBtn = document.querySelector('.generate-cover-letter-btn');
   const coverLetterDisplay = document.querySelector('.generated-cover-letter');
@@ -1920,7 +2399,7 @@ Return only the cover letter text without any formatting or additional text.`
     });
     } else {
       // Gemini API call for cover letter generation
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${currentApiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -2316,13 +2795,32 @@ function updateBadge() {
 
   // Check if we have a valid API key for the current provider
   let hasValidApiKey = false;
-  if (aiProvider === 'openai' && selectedOpenaiKey) {
-    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
-    hasValidApiKey = key && key.status === 'valid';
-  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
-    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
-    hasValidApiKey = key && key.status === 'valid';
+  if (aiProvider === 'openai') {
+    // Check if we have any valid OpenAI keys
+    hasValidApiKey = openaiKeys.some(key => key.status === 'valid');
+    // If we have a selected key, prefer that one
+    if (selectedOpenaiKey) {
+      const selectedKey = openaiKeys.find(k => k.id === selectedOpenaiKey);
+      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
+    }
+  } else if (aiProvider === 'gemini') {
+    // Check if we have any valid Gemini keys
+    hasValidApiKey = geminiKeys.some(key => key.status === 'valid');
+    // If we have a selected key, prefer that one
+    if (selectedGeminiKey) {
+      const selectedKey = geminiKeys.find(k => k.id === selectedGeminiKey);
+      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
+    }
   }
+  
+  console.log('updateBadge: API key check:', {
+    aiProvider,
+    hasValidApiKey,
+    openaiKeys: openaiKeys.length,
+    geminiKeys: geminiKeys.length,
+    selectedOpenaiKey,
+    selectedGeminiKey
+  });
 
   let content = '';
 
@@ -2401,6 +2899,10 @@ function updateBadge() {
           Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span><br>
           Company Type: <span style="color: #dc2626; font-weight: 600;">${escapeHtml(jobInfo.companyType || 'Not specified')}</span><br>
           Size & Team: <span style="color: ${getCompanySizeColor(jobInfo.companySize)}; font-weight: 600;">${escapeHtml(jobInfo.companySize || 'Unknown')} (${escapeHtml(jobInfo.teamSize || 'Not specified')})</span><br>
+          <!-- Job Info Buttons moved here -->
+          <div class="job-info-buttons">
+            <button class="copy-job-btn" title="Copy to Google Sheets">📋</button>
+          </div>
           Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate || 'Not specified')}</span>
           ${jobInfo.jobSummary ? `
             <div class="job-summary-section" style="margin-top: 12px; padding: 10px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6;">
@@ -2420,11 +2922,6 @@ function updateBadge() {
               </div>
             </div>
           ` : ''}
-            <!-- Job Info Buttons moved here -->
-            <div class="job-info-buttons">
-              <button class="copy-job-btn" title="Copy to Google Sheets">📋</button>
-              <button class="extract-job-btn" title="Extract Job Information">🔍</button>
-            </div>
           </div>
           
           <!-- Cover Letter Generation Section - Only show if profile is complete -->
@@ -2454,7 +2951,8 @@ function updateBadge() {
             </div>
         `;
       } else {
-      // Show enhanced loading UI when job info is not available
+      // Show enhanced loading UI when job info is not available, but only if AI analysis is enabled and we have valid API keys
+      if (aiAnalysisEnabled && hasValidApiKey) {
         content += `
         <div class="job-info loading-ui">
           <div class="job-info-title">🔄 Job Detection Status</div>
@@ -2494,8 +2992,23 @@ function updateBadge() {
             <button class="extract-job-btn" title="Extract Job Information">🔍</button>
           </div>
         `;
-      }
-      }
+      } else if (!aiAnalysisEnabled) {
+        // Show message when AI Analysis is disabled
+        content += `
+        <div class="job-info" style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 1px solid #d1d5db; color: #6b7280;">
+          <div class="job-info-title" style="color: #9ca3af;">⏸️ AI Analysis Disabled</div>
+        </div>
+        `;
+      } else if (!hasValidApiKey) {
+        // Show message when no valid API keys are available
+        content += `
+        <div class="job-info" style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fecaca; color: #dc2626;">
+          <div class="job-info-title" style="color: #dc2626;">🔑 API Key Required</div>
+        </div>
+        `;
+      } // End of aiAnalysisEnabled && hasValidApiKey condition
+      } // End of inner else block (jobInfo)
+  } // End of outer else block
 
   const sortedKeywords = Object.entries(matches)
     .filter(([_, count]) => count > 0)

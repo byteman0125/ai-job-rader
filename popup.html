@@ -30,7 +30,7 @@
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 12px 12px;
+      padding: 10px 12px 8px 12px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -914,6 +914,7 @@
     /* Header switch styling */
     .header .switch {
       flex-shrink: 0;
+      transform: scale(0.8);
     }
     
     .header .slider {
@@ -1300,37 +1301,52 @@
 <body>
   <div class="container">
     <div class="header">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <h1>🔍 AI Job Radar</h1>
           <button id="aboutBtn" class="about-btn" title="About Extension">❓</button>
         </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <label class="switch" title="Enable/Disable Cover Letter Generation">
-            <input type="checkbox" id="coverLetterToggle">
-            <span class="slider round"></span>
-          </label>
+      </div>
+      <div class="subtitle" style="margin-bottom: 8px;">AI-powered job detection and keyword highlighting</div>
+      <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.8);">Job Radar</span>
           <label class="switch" title="Enable/Disable Job Radar">
             <input type="checkbox" id="jobRadarToggle">
             <span class="slider round"></span>
           </label>
         </div>
+
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.8);">Cover Letter</span>
+          <label class="switch" title="Enable/Disable Cover Letter Generation">
+            <input type="checkbox" id="coverLetterToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.8);">AI Analysis</span>
+                      <label class="switch" title="Enable/Disable AI Job Analysis">
+              <input type="checkbox" id="aiAnalysisToggle">
+              <span class="slider round"></span>
+            </label>
+        </div>
       </div>
-      <div class="subtitle">AI-powered job detection and keyword highlighting</div>
     </div>
     
     <div class="tabs">
       <div class="tab active" data-tab="url-opener">
-        <span>URL Open & AI</span>
+        <span>URL Open</span>
       </div>
       <div class="tab" data-tab="ai-settings">
-        <span>🤖 AI Settings</span>
+        <span>AI Settings</span>
       </div>
       <div class="tab" data-tab="profile">
-        <span>👤 Profile</span>
+        <span>Profile</span>
       </div>
       <div class="tab" data-tab="keywords">
-        <span>Highlighting</span>
+        <span>Highlight</span>
       </div>
     </div>
     
@@ -1409,24 +1425,6 @@
         </div>
       </div>
       
-      <!-- Global Add Key Form (shown when no keys exist) -->
-      <div class="section" id="add-key-form" style="display: none;">
-        <div class="section-title">Add Your API Keys</div>
-        <div class="add-key-help">
-          <p>Get your API key from:</p>
-          <ul>
-            <li><strong>OpenAI:</strong> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></li>
-            <li><strong>Gemini:</strong> <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></li>
-          </ul>
-        </div>
-        
-        <div class="add-key-form">
-          <textarea id="globalKeyInput" class="api-key-input" placeholder="Enter your API keys" rows="2"></textarea>
-          <button id="addGlobalKey" class="add-key-btn">+</button>
-        </div>
-        
-      </div>
-      
       <div class="section" id="openai-section">
         <div class="section-title">OpenAI API Keys</div>
         <div class="api-keys-container" id="openaiKeysContainer">
@@ -1454,7 +1452,19 @@
           <button id="addGeminiKey" class="add-key-btn">+</button>
         </div>
       </div>
-      
+
+            
+      <!-- Global Add Key Form (shown when no keys exist) -->
+      <div class="section" id="add-key-form" style="display: none;">
+        <div class="section-title">Add Your API Keys</div>
+              
+        <div class="add-key-form">
+          <textarea id="globalKeyInput" class="api-key-input" placeholder="Enter your API keys" rows="2"></textarea>
+          <button id="addGlobalKey" class="add-key-btn">+</button>
+        </div>
+        
+      </div>
+
       <div class="section">
         <div class="section-title">API Statistics</div>
         <div class="api-stats">
