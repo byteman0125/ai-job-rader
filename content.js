@@ -22,6 +22,7 @@ let lastLoadError = null;
 let isRequestInProgress = false; // Prevent multiple simultaneous requests
 let blockedRequests = 0; // Track blocked requests
 let jobRadarEnabled = true; // Default to enabled
+let coverLetterEnabled = false; // Default to disabled
 let userLocation = null;
 let userWorkExperience = null;
 
@@ -125,6 +126,25 @@ let userWorkExperience = null;
     return cleaned;
   }
 
+// Helper function to get color for company size
+function getCompanySizeColor(companySize) {
+  if (!companySize) return '#6b7280'; // gray for unknown
+  
+  const size = companySize.toLowerCase();
+  switch (size) {
+    case 'startup':
+      return '#f59e0b'; // orange for startup
+    case 'scale-up':
+      return '#3b82f6'; // blue for scale-up
+    case 'mid-size':
+      return '#059669'; // green for mid-size
+    case 'enterprise':
+      return '#7c3aed'; // purple for enterprise
+    default:
+      return '#6b7280'; // gray for unknown
+  }
+  }
+
 // Default keywords with individual colors
 const defaultKeywords = [
   { text: 'remote', color: 'green' },
@@ -139,7 +159,7 @@ const defaultKeywords = [
 ];
 
 // Load settings from storage including badge position
-chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'userLocation', 'workExperience'], (result) => {
+chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'userLocation', 'workExperience', 'coverLetterEnabled'], (result) => {
 
   if (result.keywords && result.keywords.length > 0) {
     keywords = result.keywords;
@@ -187,6 +207,9 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'openaiKeys'
   if (result.workExperience) {
     userWorkExperience = result.workExperience;
   }
+  
+  // Load cover letter toggle state (default to disabled)
+  coverLetterEnabled = result.coverLetterEnabled === true;
 
   initializeHighlighter();
 
@@ -240,6 +263,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         updateBadgeForProfile();
       }, 3000);
     }
+    
+    // Listen for cover letter toggle changes
+    if (changes.coverLetterEnabled) {
+      coverLetterEnabled = changes.coverLetterEnabled.newValue === true;
+      updateCoverLetterSectionVisibility();
+    }
   }
 });
 
@@ -254,7 +283,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     sendResponse({ totalMatches: totalMatches });
-
+    
   } else if (request.action === 'updateJobRadarState') {
     jobRadarEnabled = request.enabled;
     
@@ -274,6 +303,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         existing.style.display = 'none';
       }
     }
+    
+  } else if (request.action === 'updateCoverLetterState') {
+    coverLetterEnabled = request.enabled;
+    
+    // Update cover letter section visibility immediately
+    updateCoverLetterSectionVisibility();
   } else if (request.action === 'updateKeywordColor') {
     // Update keyword color in existing highlights
     const keyword = request.keyword;
@@ -1012,16 +1047,16 @@ async function extractJobInfo() {
     let response;
     if (aiProvider === 'openai') {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [{
-            role: 'system',
-            content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{
+          role: 'system',
+          content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
 
 "position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
 - PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
@@ -1059,23 +1094,74 @@ async function extractJobInfo() {
 Use "" if unclear or insufficient information.
 
 "industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
+"companySize": Company size classification - Analyze the FULL CONTENT to determine the company's size and stage. **PRIORITIZE explicit company descriptions over team size numbers.**
+
+**PRIMARY INDICATORS** (Look for these first):
+- Direct company status statements: "we are a startup", "we are a scale-up company", "we are an enterprise", "we are a growing startup"
+- Company stage descriptions: "early-stage startup", "fast-growing startup", "established company", "mature company"
+- Funding stage mentions: "seed-stage", "Series A startup", "Series B company", "Series C company", "pre-IPO", "public company"
+- Company maturity: "newly founded", "recently launched", "well-established", "industry leader", "Fortune 500"
+
+**SECONDARY INDICATORS** (Use if no explicit descriptions found):
+- Team size numbers: "team of X people", "X+ employees", "X-person team", "X employees"
+- Employee count: "50 employees", "200+ people", "1000+ staff"
+- Company growth: "rapidly growing", "expanding team", "hiring aggressively"
+
+**Classification Rules:**
+- "Startup" (1-50 employees, early stage, pre-Series A, seed stage) - Examples: "we are a startup", "early-stage company", "10-person team", "seed-stage startup"
+- "Scale-up" (51-200 employees, growing company, Series A/B, rapid growth) - Examples: "we are a scale-up", "Series A company", "100+ people", "fast-growing startup"
+- "Mid-size" (201-1000 employees, established company, Series C+, stable growth) - Examples: "Series C company", "700+ people", "established company", "profitable company"
+- "Enterprise" (1000+ employees, large corporation, public company, Fortune 500) - Examples: "Fortune 500", "public company", "5000+ employees", "multinational corporation"
+- "Unknown" (size not clearly indicated or insufficient information)
+
+**IMPORTANT**: If a company explicitly states "we are a startup" but has 200+ employees, still classify as "Startup" based on their self-description.
+
+"teamSize": Extract the actual team size or employee count mentioned in the job posting. Look for phrases like:
+- "team of X people", "X+ employees", "X-person team", "X employees"
+- "X staff members", "X team members", "X people", "X workers"
+- "global team of X", "distributed team of X", "remote team of X"
+- Employee count numbers (e.g., "700+ people", "50 employees", "200+ team members")
+
+Return the exact phrase found (e.g., "700+ people", "50 employees", "team of 25") or "Not specified" if no team size is mentioned.
+
+"foundedDate": Extract the company's founding date or establishment year. Look for phrases like:
+- "founded in XXXX", "established in XXXX", "started in XXXX"
+- "since XXXX", "since XXXX", "launched in XXXX"
+- "company founded XXXX", "we've been around since XXXX"
+- "XXXX startup", "founded XXXX", "established XXXX"
+- Year mentions in company history: "in XXXX we started", "back in XXXX"
+
+Return the exact phrase found (e.g., "founded in 2015", "since 2020", "established 2018") or "Not specified" if no founding date is mentioned.
+
+"companyType": Extract the company's business type or category. Look for phrases like:
+- "startup", "scale-up", "enterprise", "corporation", "company"
+- "SaaS company", "tech startup", "fintech startup", "healthtech company"
+- "B2B company", "B2C company", "marketplace", "platform"
+- "consulting firm", "agency", "studio", "lab", "incubator"
+- "public company", "private company", "non-profit", "NGO"
+- "Fortune 500", "unicorn", "decacorn", "IPO company"
+
+Return the exact phrase found (e.g., "startup", "SaaS company", "Fortune 500") or "Not specified" if no company type is mentioned.
+
+"jobSummary": Create a concise 3-5 sentence summary of the job posting that covers:
+1. What the company does (their business/product/service)
+2. What they're building or developing
+3. What they're looking to hire for (role purpose/goals)
+4. Key company highlights or achievements (if mentioned)
+5. Growth plans or future direction (if mentioned)
+
+Focus on the most important and interesting aspects. Write in clear, engaging sentences that give a complete picture of the opportunity. Avoid repetitive information and keep it informative but concise.
 "skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
-"matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
+"matchRate": Calculate an ATS (Applicant Tracking System) match rate percentage (0-100) between the user's resume and this job posting. ATS systems scan for specific keywords and phrases to rank candidates. Focus on:
 
-1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
-2. **Frameworks & Libraries**: Django, React, Spring Boot, Node.js, etc.
-3. **Databases**: PostgreSQL, MongoDB, Redis, Elasticsearch, etc.
-4. **Cloud & DevOps**: AWS, Docker, Kubernetes, Terraform, CI/CD tools
-5. **Tools & Technologies**: Git, REST APIs, microservices, etc.
+1. **Exact Keyword Matches**: Programming languages, frameworks, tools mentioned in both resume and job posting
+2. **Technical Skills**: Specific technologies, platforms, methodologies that appear in both
+3. **Industry Terms**: Domain-specific terminology and buzzwords
+4. **Certifications**: Professional certifications and qualifications
+5. **Experience Keywords**: Years of experience, project types, team sizes mentioned
 
-**Scoring Breakdown:**
-- 90-100%: Excellent tech stack match (most skills align)
-- 70-89%: Good tech stack match (many skills align)
-- 50-69%: Moderate tech stack match (some skills align)
-- 30-49%: Poor tech stack match (few skills align)
-- 0-29%: Very poor tech stack match (minimal skills align)
 
-**Focus on technical skills overlap, NOT years of experience or general qualifications.**
+**Focus on keyword density and exact matches that ATS systems prioritize for automated screening.**
 
 Return only the percentage number (e.g., 85) without any text or symbols.
 
@@ -1084,21 +1170,21 @@ The HTML structure will help you identify the main job title and company name mo
 Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
 
 CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".`
-          }, {
-            role: 'user',
-            content: `Job Posting Content:
+        }, {
+          role: 'user',
+          content: `Job Posting Content:
 ${pageContent}
 
 User Work Experience:
 ${userWorkExperience || 'No work experience provided'}
 
 User Location: ${userLocation || 'Not specified'}`
-          }],
-          max_tokens: 1000,
-          temperature: 0.1
-        }),
-        signal: controller.signal
-      });
+        }],
+        max_tokens: 1000,
+        temperature: 0.1
+      }),
+      signal: controller.signal
+    });
     } else {
       // Gemini API call
       response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
@@ -1147,23 +1233,68 @@ User Location: ${userLocation || 'Not specified'}`
 Use "" if unclear or insufficient information.
 
 "industry": Industry classification - Analyze the FULL CONTENT to determine the company's industry. Look for industry-specific keywords, company descriptions, product/service mentions, and business context. Examples: Healthcare, Fintech, E-commerce, SaaS, Manufacturing, Education, Retail, etc. Return the most specific industry category, or "" if unclear.
+"companySize": Company size classification - Analyze the FULL CONTENT to determine the company's size and stage. **PRIORITIZE explicit company descriptions over team size numbers.**
+
+**PRIMARY INDICATORS** (Look for these first):
+- Direct company status statements: "we are a startup", "we are a scale-up company", "we are an enterprise", "we are a growing startup"
+- Company stage descriptions: "early-stage startup", "fast-growing startup", "established company", "mature company"
+- Funding stage mentions: "seed-stage", "Series A startup", "Series B company", "Series C company", "pre-IPO", "public company"
+- Company maturity: "newly founded", "recently launched", "well-established", "industry leader", "Fortune 500"
+
+**SECONDARY INDICATORS** (Use if no explicit descriptions found):
+- Team size numbers: "team of X people", "X+ employees", "X-person team", "X employees"
+- Employee count: "50 employees", "200+ people", "1000+ staff"
+- Company growth: "rapidly growing", "expanding team", "hiring aggressively"
+
+**Classification Rules:**
+- "Startup" (1-50 employees, early stage, pre-Series A, seed stage) - Examples: "we are a startup", "early-stage company", "10-person team", "seed-stage startup"
+- "Scale-up" (51-200 employees, growing company, Series A/B, rapid growth) - Examples: "we are a scale-up", "Series A company", "100+ people", "fast-growing startup"
+- "Mid-size" (201-1000 employees, established company, Series C+, stable growth) - Examples: "Series C company", "700+ people", "established company", "profitable company"
+- "Enterprise" (1000+ employees, large corporation, public company, Fortune 500) - Examples: "Fortune 500", "public company", "5000+ employees", "multinational corporation"
+- "Unknown" (size not clearly indicated or insufficient information)
+
+**IMPORTANT**: If a company explicitly states "we are a startup" but has 200+ employees, still classify as "Startup" based on their self-description.
+
+"teamSize": Extract the actual team size or employee count mentioned in the job posting. Look for phrases like:
+- "team of X people", "X+ employees", "X-person team", "X employees"
+- "X staff members", "X team members", "X people", "X workers"
+- "global team of X", "distributed team of X", "remote team of X"
+- Employee count numbers (e.g., "700+ people", "50 employees", "200+ team members")
+
+Return the exact phrase found (e.g., "700+ people", "50 employees", "team of 25") or "Not specified" if no team size is mentioned.
+
+"foundedDate": Extract the company's founding date or establishment year. Look for phrases like:
+- "founded in XXXX", "established in XXXX", "started in XXXX"
+- "since XXXX", "since XXXX", "launched in XXXX"
+- "company founded XXXX", "we've been around since XXXX"
+- "XXXX startup", "founded XXXX", "established XXXX"
+- Year mentions in company history: "in XXXX we started", "back in XXXX"
+
+Return the exact phrase found (e.g., "founded in 2015", "since 2020", "established 2018") or "Not specified" if no founding date is mentioned.
+
+"companyType": Extract the company's business type or category. Look for phrases like:
+- "startup", "scale-up", "enterprise", "corporation", "company"
+- "SaaS company", "tech startup", "fintech startup", "healthtech company"
+- "B2B company", "B2C company", "marketplace", "platform"
+- "consulting firm", "agency", "studio", "lab", "incubator"
+- "public company", "private company", "non-profit", "NGO"
+- "Fortune 500", "unicorn", "decacorn", "IPO company"
+
+Return the exact phrase found (e.g., "startup", "SaaS company", "Fortune 500") or "Not specified" if no company type is mentioned.
+
+"jobSummary": Create a concise 3-5 sentence summary of the job posting that covers:
+1. What the company does (their business/product/service)
+2. What they're building or developing
+3. What they're looking to hire for (role purpose/goals)
+4. Key company highlights or achievements (if mentioned)
+5. Growth plans or future direction (if mentioned)
+
+Focus on the most important and interesting aspects. Write in clear, engaging sentences that give a complete picture of the opportunity. Avoid repetitive information and keep it informative but concise.
 "skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
-"matchRate": Calculate a match rate percentage (0-100) between the user's TECH STACK from their resume and this job posting's required skills. Focus primarily on:
+"matchRate": Calculate an ATS (Applicant Tracking System) match rate percentage (0-100) between the user's resume and this job posting. ATS systems scan for specific keywords and phrases to rank candidates. Focus on:
 
-1. **Programming Languages**: Python, JavaScript, Java, Go, Ruby, etc.
-2. **Frameworks & Libraries**: Django, React, Spring Boot, Node.js, etc.
-3. **Databases**: PostgreSQL, MongoDB, Redis, Elasticsearch, etc.
-4. **Cloud & DevOps**: AWS, Docker, Kubernetes, Terraform, CI/CD tools
-5. **Tools & Technologies**: Git, REST APIs, microservices, etc.
 
-**Scoring Breakdown:**
-- 90-100%: Excellent tech stack match (most skills align)
-- 70-89%: Good tech stack match (many skills align)
-- 50-69%: Moderate tech stack match (some skills align)
-- 30-49%: Poor tech stack match (few skills align)
-- 0-29%: Very poor tech stack match (minimal skills align)
-
-**Focus on technical skills overlap, NOT years of experience or general qualifications.**
+**Focus on keyword density and exact matches that ATS systems prioritize for automated screening.**
 
 Return only the percentage number (e.g., 85) without any text or symbols.
 
@@ -1272,6 +1403,11 @@ User Location: ${userLocation || 'Not specified'}`
             company: company,
             jobType: jobType,
             industry: (jobData.industry || '').trim(),
+            companySize: (jobData.companySize || '').trim(),
+            teamSize: (jobData.teamSize || '').trim(),
+            foundedDate: (jobData.foundedDate || '').trim(),
+            companyType: (jobData.companyType || '').trim(),
+            jobSummary: (jobData.jobSummary || '').trim(),
             skills: Array.isArray(jobData.skills) ? jobData.skills : [],
             matchRate: jobData.matchRate || 0
           };
@@ -1319,7 +1455,7 @@ User Location: ${userLocation || 'Not specified'}`
       }
       
       lastLoadError = `API Error: ${response.status} - ${errorText}`;
-      updateBadge();
+        updateBadge();
     }
   } catch (error) {
       // Handle network or other errors
@@ -1406,10 +1542,10 @@ function initializeHighlighter() {
     initializeUrlOpeningTracker();
   }
   
-      // If this is a job site, keep highlighting active regardless of Job Radar toggle
-    if (isJobSite) {
-      // Only show badge and run job extraction when Job Radar is enabled
-      if (jobRadarEnabled) {
+  // If this is a job site, keep highlighting active regardless of Job Radar toggle
+  if (isJobSite) {
+    // Only show badge and run job extraction when Job Radar is enabled
+    if (jobRadarEnabled) {
         // Check if we have a valid API key for the current provider
         let hasValidApiKey = false;
         if (aiProvider === 'openai' && selectedOpenaiKey) {
@@ -1422,18 +1558,18 @@ function initializeHighlighter() {
         
         // Extract job information if we have a valid API key
         if (hasValidApiKey) {
-          startContinuousJobExtraction();
-        }
-        
-        // Show the badge
-        updateBadge();
-      } else {
-        // Hide/remove the badge if it exists when disabled
-        const existingBadge = document.getElementById('keyword-highlighter-badge');
-        if (existingBadge) {
-          existingBadge.remove();
-        }
+        startContinuousJobExtraction();
       }
+      
+      // Show the badge
+      updateBadge();
+    } else {
+      // Hide/remove the badge if it exists when disabled
+      const existingBadge = document.getElementById('keyword-highlighter-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+    }
 
     // Initial highlight for existing content (runs regardless of toggle)
     if (document.readyState === 'loading') {
@@ -1574,9 +1710,11 @@ function copyJobToClipboard() {
     const cleanPosition = jobInfo.position.replace(/[\t\n\r]/g, ' ').trim();
     const cleanIndustry = jobInfo.industry.replace(/[\t\n\r]/g, ' ').trim();
     
-    // Load copy preferences (defaults: includeIndustry=false, includeTechStack=false, includeMatchRate=false)
-    chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], (prefs) => {
+    // Load copy preferences (defaults: includeIndustry=false, includeCompanySize=false, includeFoundedDate=false, includeTechStack=false, includeMatchRate=false)
+    chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], (prefs) => {
       const includeIndustry = prefs.copyIncludeIndustry === true;
+      const includeCompanySize = prefs.copyIncludeCompanySize === true;
+      const includeFoundedDate = prefs.copyIncludeFoundedDate === true;
       const includeTechStack = prefs.copyIncludeTechStack === true;
       const includeMatchRate = prefs.copyIncludeMatchRate === true;
 
@@ -1584,6 +1722,14 @@ function copyJobToClipboard() {
       const fields = [cleanCompany, cleanPosition, jobUrl];
       if (includeIndustry) {
         fields.push(cleanIndustry);
+      }
+      if (includeCompanySize) {
+        const cleanCompanySize = jobInfo.companySize.replace(/[\t\n\r]/g, ' ').trim();
+        fields.push(cleanCompanySize);
+      }
+      if (includeFoundedDate) {
+        const cleanFoundedDate = jobInfo.foundedDate.replace(/[\t\n\r]/g, ' ').trim();
+        fields.push(cleanFoundedDate);
       }
       if (includeTechStack) {
         const techStack = Array.isArray(jobInfo.skills) ? jobInfo.skills.join(', ') : '';
@@ -1760,18 +1906,18 @@ Return only the cover letter text without any formatting or additional text.`
     let response;
     if (aiProvider === 'openai') {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: messages,
-          max_tokens: 800,
-          temperature: 0.7
-        })
-      });
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 800,
+        temperature: 0.7
+      })
+    });
     } else {
       // Gemini API call for cover letter generation
       response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentApiKey}`, {
@@ -1863,6 +2009,22 @@ function loadCoverLetterPrompt() {
   });
 }
 
+// Update cover letter section visibility based on toggle state
+function updateCoverLetterSectionVisibility() {
+  const badge = document.getElementById('keyword-highlighter-badge');
+  if (!badge) return;
+  
+  const existingCoverLetterSection = badge.querySelector('.cover-letter-section');
+  if (!existingCoverLetterSection) return;
+  
+  // Show/hide based on toggle state
+  if (coverLetterEnabled) {
+    existingCoverLetterSection.style.display = 'block';
+  } else {
+    existingCoverLetterSection.style.display = 'none';
+  }
+}
+
 // Update badge to show/hide cover letter section based on profile completion
 function updateBadgeForProfile() {
   const badge = document.getElementById('keyword-highlighter-badge');
@@ -1876,7 +2038,8 @@ function updateBadgeForProfile() {
   
   // Prevent blinking by checking if we're already in the correct state
   if (hasProfile && existingCoverLetterSection) {
-    // Profile is complete and cover letter section already exists - do nothing
+    // Profile is complete and cover letter section already exists - update visibility based on toggle
+    updateCoverLetterSectionVisibility();
     return;
   }
   
@@ -1890,7 +2053,7 @@ function updateBadgeForProfile() {
     const jobInfoSection = badge.querySelector('.job-info');
     if (jobInfoSection) {
       const coverLetterHTML = `
-        <div class="cover-letter-section">
+        <div class="cover-letter-section" style="display: ${coverLetterEnabled ? 'block' : 'none'}">
           <div class="cover-letter-title">✍️ Cover Letter Generator</div>
           <div class="cover-letter-input-container">
             <textarea 
@@ -2041,7 +2204,7 @@ function createBadge() {
     `;
     dragHandle.style.cssText = `
       cursor: move;
-      padding: 4px 10px;
+      padding: 6px 10px;
       text-align: center;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       border-radius: 16px 16px 0 0;
@@ -2223,7 +2386,7 @@ function updateBadge() {
             margin-bottom: 8px;
             text-align: center;
           ">
-            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Match Rate - ${jobInfo.matchRate}%</div>
+            <div style="font-size: 11px; color:rgb(32, 79, 145); margin-bottom: 4px;">ATS Match Rate - ${jobInfo.matchRate}%</div>
           </div>
         `;
       }
@@ -2235,7 +2398,16 @@ function updateBadge() {
           <div class="job-info-title">Job Information <span class="job-type-${jobInfo.jobType === 'Remote' ? 'green' : 'red'}"> - ${escapeHtml(jobInfo.jobType || 'No Sure')}</span></div>
             Company: ${escapeHtml(jobInfo.company || '')}<br>
           Position: ${escapeHtml(jobInfo.position || '')}<br>
-          Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span>
+          Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span><br>
+          Company Type: <span style="color: #dc2626; font-weight: 600;">${escapeHtml(jobInfo.companyType || 'Not specified')}</span><br>
+          Size & Team: <span style="color: ${getCompanySizeColor(jobInfo.companySize)}; font-weight: 600;">${escapeHtml(jobInfo.companySize || 'Unknown')} (${escapeHtml(jobInfo.teamSize || 'Not specified')})</span><br>
+          Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate || 'Not specified')}</span>
+          ${jobInfo.jobSummary ? `
+            <div class="job-summary-section" style="margin-top: 12px; padding: 10px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6;">
+              <div class="job-summary-title" style="font-weight: 600; color: #1e40af; margin-bottom: 6px; font-size: 13px;">📋 Job Summary:</div>
+              <div class="job-summary-content" style="font-size: 12px; line-height: 1.4; color: #374151;">${escapeHtml(jobInfo.jobSummary)}</div>
+            </div>
+          ` : ''}
           ${jobInfo.skills && jobInfo.skills.length > 0 ? `
             <div class="skills-section">
               <div class="skills-title">🔧 Required Skills:</div>
@@ -2256,7 +2428,7 @@ function updateBadge() {
           </div>
           
           <!-- Cover Letter Generation Section - Only show if profile is complete -->
-            <div class="cover-letter-section">
+            <div class="cover-letter-section" style="display: ${coverLetterEnabled ? 'block' : 'none'}">
               <div class="cover-letter-title">✍️ Cover Letter Generator</div>
               <div class="cover-letter-input-container">
                 <textarea 
@@ -2416,7 +2588,7 @@ function updateBadge() {
               }
               
               if (hasValidApiKey) {
-                startContinuousJobExtraction();
+              startContinuousJobExtraction();
               }
             }
             

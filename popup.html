@@ -913,7 +913,6 @@
     
     /* Header switch styling */
     .header .switch {
-      margin-left: 12px;
       flex-shrink: 0;
     }
     
@@ -924,6 +923,26 @@
     
     .header input:checked + .slider {
       background: rgba(255, 255, 255, 0.9);
+    }
+    
+    /* Cover letter toggle specific styling */
+    #coverLetterToggle + .slider {
+      background-color: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    
+    #coverLetterToggle:checked + .slider {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    /* Job radar toggle specific styling */
+    #jobRadarToggle + .slider {
+      background-color: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    
+    #jobRadarToggle:checked + .slider {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     }
     
     /* AI Settings Tab Styles */
@@ -1286,10 +1305,16 @@
           <h1>🔍 AI Job Radar</h1>
           <button id="aboutBtn" class="about-btn" title="About Extension">❓</button>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="jobRadarToggle">
-          <span class="slider round"></span>
-        </label>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <label class="switch" title="Enable/Disable Cover Letter Generation">
+            <input type="checkbox" id="coverLetterToggle">
+            <span class="slider round"></span>
+          </label>
+          <label class="switch" title="Enable/Disable Job Radar">
+            <input type="checkbox" id="jobRadarToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
       </div>
       <div class="subtitle">AI-powered job detection and keyword highlighting</div>
     </div>
@@ -1373,14 +1398,12 @@
             <input type="radio" name="aiProvider" value="openai" id="openaiProvider" checked>
             <div class="provider-card">
               <div class="provider-name">OpenAI</div>
-              <div class="provider-subtitle">Premium</div>
             </div>
           </label>
           <label class="provider-option">
             <input type="radio" name="aiProvider" value="gemini" id="geminiProvider">
             <div class="provider-card">
               <div class="provider-name">Gemini 2.0 Flash</div>
-              <div class="provider-subtitle">Free</div>
             </div>
           </label>
         </div>
@@ -1388,20 +1411,20 @@
       
       <!-- Global Add Key Form (shown when no keys exist) -->
       <div class="section" id="add-key-form" style="display: none;">
-        <div class="section-title">Add Your First API Key</div>
-        <div class="add-key-form">
-          <textarea id="globalKeyInput" class="api-key-input" placeholder="Enter your API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
-          <button id="addGlobalKey" class="add-key-btn">+</button>
-        </div>
+        <div class="section-title">Add Your API Keys</div>
         <div class="add-key-help">
           <p>Get your API key from:</p>
           <ul>
             <li><strong>OpenAI:</strong> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></li>
             <li><strong>Gemini:</strong> <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></li>
           </ul>
-          <p><strong>Multiple keys:</strong> Paste multiple keys separated by newlines, commas, or semicolons</p>
-          <p><strong>Keyboard shortcut:</strong> Press Ctrl+Enter to add keys</p>
         </div>
+        
+        <div class="add-key-form">
+          <textarea id="globalKeyInput" class="api-key-input" placeholder="Enter your API keys" rows="2"></textarea>
+          <button id="addGlobalKey" class="add-key-btn">+</button>
+        </div>
+        
       </div>
       
       <div class="section" id="openai-section">
@@ -1413,7 +1436,7 @@
           </div>
         </div>
         <div class="add-key-form">
-          <textarea id="openaiKeyInput" class="api-key-input" placeholder="Enter OpenAI API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
+          <textarea id="openaiKeyInput" class="api-key-input" placeholder="Enter OpenAI API keys" rows="3"></textarea>
           <button id="addOpenaiKey" class="add-key-btn">+</button>
         </div>
       </div>
@@ -1427,7 +1450,7 @@
           </div>
         </div>
         <div class="add-key-form">
-          <textarea id="geminiKeyInput" class="api-key-input" placeholder="Enter Gemini 2.0 Flash API key (or paste multiple keys)&#10;Press Ctrl+Enter to add" rows="3"></textarea>
+          <textarea id="geminiKeyInput" class="api-key-input" placeholder="Enter Gemini 2.0 Flash API keys" rows="3"></textarea>
           <button id="addGeminiKey" class="add-key-btn">+</button>
         </div>
       </div>
@@ -1467,19 +1490,20 @@
       <div class="section">
         <div class="section-title">Copy Job Info Fields</div>
         <div class="api-form" style="display: flex; flex-direction: column; gap: 8px;">
-          <div style="font-size: 12px; color: #64748b;">Defaults: Company, Position, URL</div>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151;">
-            <input type="checkbox" id="copyIncludeIndustry">
-            <span>Include Industry</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151;">
-            <input type="checkbox" id="copyIncludeTechStack">
-            <span>Include Tech Stack</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151;">
-            <input type="checkbox" id="copyIncludeMatchRate">
-            <span>Include Match Rate</span>
-          </label>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151;">
+              <input type="checkbox" id="copyIncludeIndustry">
+              <span>Industry</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151;">
+              <input type="checkbox" id="copyIncludeTechStack">
+              <span>Tech Stack</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151;">
+              <input type="checkbox" id="copyIncludeMatchRate">
+              <span>ATS Match Rate</span>
+            </label>
+          </div>
         </div>
       </div>
       

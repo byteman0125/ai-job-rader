@@ -42,8 +42,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Job Radar toggle element
   const jobRadarToggle = document.getElementById('jobRadarToggle');
+  // Cover Letter toggle element
+  const coverLetterToggle = document.getElementById('coverLetterToggle');
   // Copy preferences elements
   const copyIncludeIndustry = document.getElementById('copyIncludeIndustry');
+  const copyIncludeCompanySize = document.getElementById('copyIncludeCompanySize');
+  const copyIncludeFoundedDate = document.getElementById('copyIncludeFoundedDate');
   const copyIncludeTechStack = document.getElementById('copyIncludeTechStack');
   const copyIncludeMatchRate = document.getElementById('copyIncludeMatchRate');
   
@@ -201,12 +205,44 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
+  // Cover Letter toggle functionality
+  coverLetterToggle.addEventListener('change', function() {
+    const isEnabled = this.checked;
+    
+    // Save the state
+    chrome.storage.sync.set({coverLetterEnabled: isEnabled}, function() {
+      // Update all tabs with the new state
+      updateCoverLetterState(isEnabled);
+      
+      // Show feedback
+      if (isEnabled) {
+        showSuccessMessage('Cover Letter generation enabled!');
+      } else {
+        showSuccessMessage('Cover Letter generation disabled!');
+      }
+    });
+  });
+  
   // Function to update Job Radar state across all tabs
   function updateJobRadarState(isEnabled) {
     chrome.tabs.query({}, function(tabs) {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, {
           action: 'updateJobRadarState',
+          enabled: isEnabled
+        }).catch(() => {
+          // Ignore errors for tabs that don't have the content script
+        });
+      });
+    });
+  }
+  
+  // Function to update Cover Letter state across all tabs
+  function updateCoverLetterState(isEnabled) {
+    chrome.tabs.query({}, function(tabs) {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'updateCoverLetterState',
           enabled: isEnabled
         }).catch(() => {
           // Ignore errors for tabs that don't have the content script
@@ -327,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function() {
   ];
   
   // Load settings from storage
-  chrome.storage.sync.get(['keywords', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
+  chrome.storage.sync.get(['keywords', 'aiProvider', 'openaiKeys', 'geminiKeys', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], function(result) {
     let keywords = result.keywords;
     
     // Initialize with default keywords if none exist
@@ -402,9 +438,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update all tabs with the current state
     updateJobRadarState(isEnabled);
+    
+    // Load Cover Letter toggle state (default to disabled)
+    const coverLetterEnabled = result.coverLetterEnabled === true; // Default to false if not set
+    coverLetterToggle.checked = coverLetterEnabled;
+    
+    // Update all tabs with the current cover letter state
+    updateCoverLetterState(coverLetterEnabled);
 
     // Initialize copy preferences (defaults false)
     copyIncludeIndustry.checked = result.copyIncludeIndustry === true;
+    copyIncludeCompanySize.checked = result.copyIncludeCompanySize === true;
+    copyIncludeFoundedDate.checked = result.copyIncludeFoundedDate === true;
     copyIncludeTechStack.checked = result.copyIncludeTechStack === true;
     copyIncludeMatchRate.checked = result.copyIncludeMatchRate === true;
   });
@@ -413,12 +458,16 @@ document.addEventListener('DOMContentLoaded', function() {
   function saveCopyPrefs() {
     chrome.storage.sync.set({
       copyIncludeIndustry: copyIncludeIndustry.checked,
+      copyIncludeCompanySize: copyIncludeCompanySize.checked,
+      copyIncludeFoundedDate: copyIncludeFoundedDate.checked,
       copyIncludeTechStack: copyIncludeTechStack.checked,
       copyIncludeMatchRate: copyIncludeMatchRate.checked
     });
   }
 
   copyIncludeIndustry && copyIncludeIndustry.addEventListener('change', saveCopyPrefs);
+  copyIncludeCompanySize && copyIncludeCompanySize.addEventListener('change', saveCopyPrefs);
+  copyIncludeFoundedDate && copyIncludeFoundedDate.addEventListener('change', saveCopyPrefs);
   copyIncludeTechStack && copyIncludeTechStack.addEventListener('change', saveCopyPrefs);
   copyIncludeMatchRate && copyIncludeMatchRate.addEventListener('change', saveCopyPrefs);
   
@@ -551,9 +600,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const globalKeyInput = document.getElementById('globalKeyInput');
         if (globalKeyInput) {
           if (currentProvider === 'openai') {
-            globalKeyInput.placeholder = 'Enter your OpenAI API key (or paste multiple keys)\nPress Ctrl+Enter to add';
+            globalKeyInput.placeholder = 'Enter your OpenAI API keys';
           } else {
-            globalKeyInput.placeholder = 'Enter your Gemini API key (or paste multiple keys)\nPress Ctrl+Enter to add';
+            globalKeyInput.placeholder = 'Enter your Gemini API keys';
           }
         }
       } else {
@@ -1263,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', function() {
     successDiv.style.cssText = `
       position: fixed;
       top: 20px;
-      right: 20px;
+      left: 20px;
       background: #48BB78;
       color: white;
       padding: 12px 20px;
@@ -1271,14 +1320,14 @@ document.addEventListener('DOMContentLoaded', function() {
       font-size: 14px;
       font-weight: 500;
       z-index: 1000;
-      animation: slideInRight 0.3s ease-out;
+      animation: slideInLeft 0.3s ease-out;
       box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
     `;
     
     document.body.appendChild(successDiv);
     
     setTimeout(() => {
-      successDiv.style.animation = 'slideOutRight 0.3s ease-in';
+      successDiv.style.animation = 'slideOutLeft 0.3s ease-in';
       setTimeout(() => {
         if (successDiv.parentNode) {
           successDiv.parentNode.removeChild(successDiv);
@@ -1295,7 +1344,7 @@ document.addEventListener('DOMContentLoaded', function() {
     errorDiv.style.cssText = `
       position: fixed;
       top: 20px;
-      right: 20px;
+      left: 20px;
       background: #F56565;
       color: white;
       padding: 12px 20px;
@@ -1303,14 +1352,14 @@ document.addEventListener('DOMContentLoaded', function() {
       font-size: 14px;
       font-weight: 500;
       z-index: 1000;
-      animation: slideInRight 0.3s ease-out;
+      animation: slideInLeft 0.3s ease-out;
       box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
     `;
     
     document.body.appendChild(errorDiv);
     
     setTimeout(() => {
-      errorDiv.style.animation = 'slideOutRight 0.3s ease-in';
+      errorDiv.style.animation = 'slideOutLeft 0.3s ease-in';
       setTimeout(() => {
         if (errorDiv.parentNode) {
           errorDiv.parentNode.removeChild(errorDiv);
@@ -1322,7 +1371,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Add CSS animations
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes slideInRight {
+    @keyframes slideInLeft {
       from {
         transform: translateX(100%);
         opacity: 0;
@@ -1333,13 +1382,13 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     
-    @keyframes slideOutRight {
+    @keyframes slideOutLeft {
       from {
         transform: translateX(0);
         opacity: 1;
       }
       to {
-        transform: translateX(100%);
+        transform: translateX(- 100%);
         opacity: 0;
       }
     }
