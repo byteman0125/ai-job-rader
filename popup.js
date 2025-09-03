@@ -1106,9 +1106,9 @@ document.addEventListener('DOMContentLoaded', function() {
                   reject(new Error(chrome.runtime.lastError.message));
                 } else {
                   resolve(response);
-                }
-              });
-            });
+            }
+          });
+        });
             console.log('Save response from background:', saveResponse);
           } catch (error) {
             console.error('Failed to save keys to background storage:', error);
@@ -1126,7 +1126,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (provider === 'openai') {
           openaiKeys = apiKeysData.openaiKeys;
           console.log(`Updated openaiKeys array: ${openaiKeys.length} keys`);
-        } else {
+      } else {
           geminiKeys = apiKeysData.geminiKeys;
           console.log(`Updated geminiKeys array: ${geminiKeys.length} keys`);
         }

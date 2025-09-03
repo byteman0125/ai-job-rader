@@ -221,6 +221,10 @@ let isMigrationRunning = false;
 // Global page counter for sequential key rotation
 let globalPageCounter = 0;
 
+// Cache for current page's selected key to avoid re-selecting on retries
+let currentPageSelectedKey = null;
+let currentPageUrl = null;
+
 // Function to get next key index for sequential rotation
 function getNextKeyIndex(totalKeys) {
   globalPageCounter++;
@@ -615,6 +619,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Content script: Failed to get API keys from background:', response);
       }
     });
+  } else if (request.action === 'urlKeyAssignmentsUpdated') {
+    // Handle new URL-key assignments from background script
+    console.log('Content script: Received URL-key assignments update:', request.assignments);
+    
+    // Store the assignments locally for immediate access
+    const currentUrl = window.location.href;
+    const assignment = request.assignments.find(a => a.url === currentUrl);
+    
+    if (assignment) {
+      console.log(`🎯 URL-key assignment received for current page:`, {
+        url: currentUrl,
+        urlNumber: assignment.urlNumber,
+        keyId: assignment.keyId,
+        keyMasked: assignment.keyMasked,
+        provider: assignment.provider
+      });
+      
+      // Force a badge update to reflect the new assignment
+      updateBadge();
+    } else {
+      console.log(`⚠️ No URL-key assignment found for current URL: ${currentUrl}`);
+    }
   } else if (request.action === 'updateKeywordColor') {
     // Update keyword color in existing highlights
     const keyword = request.keyword;
@@ -677,25 +703,9 @@ function manualExtractJobInfo() {
     return;
   }
   
-  // Check if we have a valid API key for the current provider
-  let hasValidApiKey = false;
-  if (aiProvider === 'openai') {
-    // Check if we have any valid OpenAI keys
-    hasValidApiKey = openaiKeys.some(key => key.status === 'valid');
-    // If we have a selected key, prefer that one
-    if (selectedOpenaiKey) {
-      const selectedKey = openaiKeys.find(k => k.id === selectedOpenaiKey);
-      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
-    }
-  } else if (aiProvider === 'gemini') {
-    // Check if we have any valid Gemini keys
-    hasValidApiKey = geminiKeys.some(key => key.status === 'valid');
-    // If we have a selected key, prefer that one
-    if (selectedGeminiKey) {
-      const selectedKey = geminiKeys.find(k => k.id === selectedGeminiKey);
-      hasValidApiKey = selectedKey && selectedKey.status === 'valid';
-    }
-  }
+  // Check if we have any valid API keys for the current provider
+  const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+  const hasValidApiKey = keys.some(key => key.status === 'valid');
   
   if (!hasValidApiKey) {
     alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
@@ -783,6 +793,17 @@ function startContinuousJobExtraction() {
   // Function to run extraction attempt
   const runExtractionAttempt = () => {
     console.log(`🔄 runExtractionAttempt called (attempt ${attempts + 1})`);
+    
+    // Check if we already have successful job info - if so, stop retrying
+    if (jobInfo && jobInfo.position) {
+      console.log(`✅ Job extraction already successful, stopping retry attempts`);
+      clearInterval(extractionInterval);
+      loadFailed = false;
+      lastLoadError = null;
+      updateBadge();
+      return;
+    }
+    
     attempts++;
     
     // Update badge to show progress
@@ -934,6 +955,13 @@ function detectJobSite() {
 // Extract job information using AI
 async function getAvailableApiKey() {
   const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+  const currentUrl = window.location.href;
+  
+  // Check if we already have a selected key for this page
+  if (currentPageSelectedKey && currentPageUrl === currentUrl) {
+    console.log(`🔄 Using cached key for same page: ${currentPageSelectedKey.masked}`);
+    return currentPageSelectedKey;
+  }
   
   console.log(`🔍 getAvailableApiKey called for ${aiProvider}:`, {
     totalKeys: keys.length,
@@ -941,22 +969,54 @@ async function getAvailableApiKey() {
   });
   
   if (aiProvider === 'openai') {
-    // For OpenAI: Use the selected key (no auto-rotation needed)
-    const selectedKey = keys.find(key => key.id === selectedOpenaiKey);
+    // For OpenAI: Use key rotation for multiple URLs
+    const availableKeys = keys.filter(key => key.status === 'valid');
     
-    if (selectedKey && selectedKey.status === 'valid') {
-      console.log(`Using selected OpenAI key: ${selectedKey.masked}`);
-      return selectedKey;
+    if (availableKeys.length === 0) {
+      console.log('❌ No valid OpenAI keys found');
+      return null;
     }
     
-    // If selected key is not valid, try to find any valid key
-    const availableKeys = keys.filter(key => key.status === 'valid');
-    if (availableKeys.length > 0) {
-      console.log(`Selected key invalid, using first available OpenAI key: ${availableKeys[0].masked}`);
+    if (availableKeys.length === 1) {
+      console.log(`Using single OpenAI key: ${availableKeys[0].masked}`);
       return availableKeys[0];
     }
     
-    return null;
+    // Check if this is a multi-open scenario (has URL-key assignments)
+    const hasUrlAssignments = await checkForUrlAssignments();
+    
+    let keyIndex;
+    let assignmentMethod;
+    
+    if (hasUrlAssignments) {
+      // Multi-open: Use order index for predictable assignment
+      keyIndex = getNextKeyIndex(availableKeys.length);
+      assignmentMethod = 'order_index';
+    } else {
+      // Single open: Use current time microseconds for random assignment
+      const now = performance.now(); // High precision timestamp with microseconds
+      const microseconds = Math.floor(now * 1000); // Convert to microseconds
+      keyIndex = microseconds % availableKeys.length;
+      assignmentMethod = 'microseconds';
+    }
+    
+    const assignedKey = availableKeys[keyIndex];
+    
+    console.log(`🔑 OpenAI key assignment (${assignmentMethod}):`, {
+      pageCounter: globalPageCounter,
+      keyIndex: keyIndex,
+      totalKeys: availableKeys.length,
+      assignedKey: assignedKey.masked,
+      keyId: assignedKey.id,
+      method: assignmentMethod,
+      ...(assignmentMethod === 'microseconds' && { microseconds: Math.floor(performance.now() * 1000) })
+    });
+    
+    // Cache the selected key for this page
+    currentPageSelectedKey = assignedKey;
+    currentPageUrl = currentUrl;
+    
+    return assignedKey;
   } else {
     // For Gemini: Smart key distribution based on page URL
     const availableKeys = keys.filter(key => 
@@ -1001,6 +1061,11 @@ async function getAvailableApiKey() {
       if (assignedKey) {
         console.log(`🎯 Using pre-assigned Gemini key: ${assignedKey.masked} (${assignedKey.usage?.requestsToday || 0}/250 requests today)`);
         console.log(`🔄 Pre-assignment: Using key ${assignedKey.id} for page ${window.location.href}`);
+        
+        // Cache the selected key for this page
+        currentPageSelectedKey = assignedKey;
+        currentPageUrl = currentUrl;
+        
         return assignedKey;
       }
     } catch (error) {
@@ -1017,6 +1082,11 @@ async function getAvailableApiKey() {
       
       console.log(`🔄 Fallback to Gemini key with least usage: ${keyWithLeastUsage.masked} (${keyWithLeastUsage.usage?.requestsToday || 0}/250 requests today)`);
       console.log(`🔄 Auto-rotation: Fallback assigned key ${keyWithLeastUsage.id} to page ${window.location.href}`);
+      
+      // Cache the selected key for this page
+      currentPageSelectedKey = keyWithLeastUsage;
+      currentPageUrl = currentUrl;
+      
       return keyWithLeastUsage;
     } catch (error) {
       console.error('Error in fallback selection:', error);
@@ -1026,6 +1096,11 @@ async function getAvailableApiKey() {
     if (availableKeys.length > 0) {
       console.log(`🚨 Final fallback: Using first available Gemini key: ${availableKeys[0].masked}`);
       console.log(`🔄 Auto-rotation: Final fallback assigned key ${availableKeys[0].id} to page ${window.location.href}`);
+      
+      // Cache the selected key for this page
+      currentPageSelectedKey = availableKeys[0];
+      currentPageUrl = currentUrl;
+      
       return availableKeys[0];
     }
   }
@@ -1043,6 +1118,13 @@ async function getPreAssignedKey(availableKeys) {
     const assignments = result.urlKeyAssignments || [];
     const timestamp = result.urlKeyAssignmentsTimestamp || 0;
     
+    console.log(`🔍 Checking for pre-assigned keys:`, {
+      totalAssignments: assignments.length,
+      timestamp: new Date(timestamp).toISOString(),
+      ageMinutes: Math.round((Date.now() - timestamp) / 60000),
+      currentUrl: window.location.href
+    });
+    
     // Check if assignments are recent (within last 5 minutes)
     const isRecent = (Date.now() - timestamp) < 5 * 60 * 1000;
     
@@ -1050,6 +1132,14 @@ async function getPreAssignedKey(availableKeys) {
       // Find assignment for current URL
       const currentUrl = window.location.href;
       const assignment = assignments.find(a => a.url === currentUrl);
+      
+      console.log(`🔍 Looking for assignment for URL: ${currentUrl}`);
+      console.log(`🔍 Available assignments:`, assignments.map(a => ({
+        url: a.url,
+        urlNumber: a.urlNumber,
+        keyId: a.keyId,
+        keyMasked: a.keyMasked
+      })));
       
       if (assignment && assignment.keyId) {
         // Find the assigned key in available keys
@@ -1066,43 +1156,94 @@ async function getPreAssignedKey(availableKeys) {
           });
           return assignedKey;
         } else {
-          console.log(`⚠️ Pre-assigned key ${assignment.keyId} not found in available keys, falling back to sequential`);
+          console.log(`⚠️ Pre-assigned key ${assignment.keyId} not found in available keys:`, {
+            availableKeyIds: availableKeys.map(k => k.id),
+            assignedKeyId: assignment.keyId
+          });
         }
       } else {
-        console.log(`⚠️ No pre-assignment found for URL: ${currentUrl}, falling back to sequential`);
+        console.log(`⚠️ No pre-assignment found for URL: ${currentUrl}`, {
+          assignment: assignment,
+          hasKeyId: assignment?.keyId
+        });
       }
     } else {
-      console.log(`⚠️ No recent URL-key assignments found, falling back to sequential`);
+      console.log(`⚠️ No recent URL-key assignments found:`, {
+        hasAssignments: assignments.length > 0,
+        isRecent: isRecent,
+        ageMinutes: Math.round((Date.now() - timestamp) / 60000)
+      });
     }
   } catch (error) {
     console.error('Error getting pre-assigned key:', error);
   }
   
   // Fallback to sequential rotation if pre-assignment fails
-  return getSequentialAssignedKey(availableKeys);
+  return await getSequentialAssignedKey(availableKeys);
 }
 
-// Fallback: Assign keys sequentially for load distribution across multiple pages
-function getSequentialAssignedKey(availableKeys) {
+// Fallback: Assign keys using order index or microseconds based on scenario
+async function getSequentialAssignedKey(availableKeys) {
   if (availableKeys.length <= 1) {
     return availableKeys[0];
   }
   
-  // Use sequential rotation: (openedCount + 1) % numberOfKeys
-  const keyIndex = getNextKeyIndex(availableKeys.length);
+  // Check if this is a multi-open scenario (has URL-key assignments)
+  const hasUrlAssignments = await checkForUrlAssignments();
+  
+  let keyIndex;
+  let assignmentMethod;
+  
+  if (hasUrlAssignments) {
+    // Multi-open: Use order index for predictable assignment
+    keyIndex = getNextKeyIndex(availableKeys.length);
+    assignmentMethod = 'order_index';
+  } else {
+    // Single open: Use current time microseconds for random assignment
+    const now = performance.now(); // High precision timestamp with microseconds
+    const microseconds = Math.floor(now * 1000); // Convert to microseconds
+    keyIndex = microseconds % availableKeys.length;
+    assignmentMethod = 'microseconds';
+  }
+  
   const assignedKey = availableKeys[keyIndex];
   
-  console.log(`🔑 Sequential assignment details:`, {
-    currentUrl: window.location.href,
+  console.log(`🔑 Key assignment (${assignmentMethod}):`, {
     pageCounter: globalPageCounter,
     keyIndex: keyIndex,
     totalKeys: availableKeys.length,
     assignedKey: assignedKey.masked,
     keyId: assignedKey.id,
-    usage: `${assignedKey.usage?.requestsToday || 0}/250 requests`
+    usage: `${assignedKey.usage?.requestsToday || 0}/250 requests`,
+    method: assignmentMethod,
+    ...(assignmentMethod === 'microseconds' && { microseconds: Math.floor(performance.now() * 1000) })
   });
   
   return assignedKey;
+}
+
+// Check if we're in a multi-open scenario (has recent URL-key assignments)
+async function checkForUrlAssignments() {
+  try {
+    const result = await chrome.storage.local.get(['urlKeyAssignments', 'urlKeyAssignmentsTimestamp']);
+    const assignments = result.urlKeyAssignments || [];
+    const timestamp = result.urlKeyAssignmentsTimestamp || 0;
+    
+    // Check if assignments are recent (within last 5 minutes)
+    const isRecent = (Date.now() - timestamp) < 5 * 60 * 1000;
+    
+    return assignments.length > 0 && isRecent;
+  } catch (error) {
+    console.error('Error checking URL assignments:', error);
+    return false;
+  }
+}
+
+// Clear the cached key for the current page
+function clearPageKeyCache() {
+  currentPageSelectedKey = null;
+  currentPageUrl = null;
+  console.log('🔄 Cleared page key cache for new page');
 }
 
 // Simple hash function for URL-based key assignment
@@ -1131,6 +1272,8 @@ function initializeUrlOpeningTracker() {
   // Listen for page load events to track URL openings
   window.addEventListener('load', () => {
     trackUrlOpening();
+    // Clear cached key when page loads (new page = new key selection)
+    clearPageKeyCache();
   });
   
   // Also track when the script loads (for direct navigation)
@@ -1237,7 +1380,21 @@ function enforceUrlDelay(delayMs) {
 
 // Calculate suggested delay between opening URLs
 function calculateSuggestedUrlDelay() {
-    return 1000; // 1 second for OpenAI
+  // Get current AI provider and API keys
+  const currentProvider = aiProvider || 'openai';
+  
+  if (currentProvider === 'gemini' && geminiKeys.length > 0) {
+    // Gemini: max(200ms, 60s/(15 * api_key_count))
+    const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
+    if (validGeminiKeys > 0) {
+      const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
+      const calculatedDelay = delayPerKey;
+      return Math.max(200, calculatedDelay);
+    }
+  }
+  
+  // OpenAI or no AI key: 0.3s (300ms)
+  return 300;
 }
 
 // Show timing suggestion in badge
@@ -1912,12 +2069,17 @@ User Location: ${userLocation || 'Not specified'}`
             geminiKeys: geminiKeys
           });
           
+          // Clear the cached key so we can select a different one
+          clearPageKeyCache();
+          
           // Try with another available key
           const nextKey = await getAvailableApiKey();
-          if (nextKey) {
+          if (nextKey && nextKey.id !== currentKeyId) {
             console.log(`Retrying with next available Gemini key: ${nextKey.masked}`);
             // Recursive call with new key
             return await extractJobInfo();
+          } else {
+            console.log('No other available keys found, stopping retry');
           }
         }
       }
@@ -2019,15 +2181,9 @@ function initializeHighlighter() {
   if (isJobSite) {
     // Only show badge and run job extraction when Job Radar is enabled
     if (jobRadarEnabled) {
-        // Check if we have a valid API key for the current provider
-        let hasValidApiKey = false;
-        if (aiProvider === 'openai' && selectedOpenaiKey) {
-          const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
-          hasValidApiKey = key && key.status === 'valid';
-        } else if (aiProvider === 'gemini' && selectedGeminiKey) {
-          const key = geminiKeys.find(k => k.id === selectedGeminiKey);
-          hasValidApiKey = key && key.status === 'valid';
-        }
+        // Check if we have any valid API keys for the current provider
+        const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
+        const hasValidApiKey = keys.some(key => key.status === 'valid');
         
         // Extract job information if we have a valid API key
         if (hasValidApiKey) {
@@ -2328,23 +2484,16 @@ async function generateCoverLetter() {
     return;
   }
   
-  // Check if we have a valid API key for the current provider
-  let hasValidApiKey = false;
-  let currentApiKey = null;
-  if (aiProvider === 'openai' && selectedOpenaiKey) {
-    const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
-    hasValidApiKey = key && key.status === 'valid';
-    currentApiKey = key ? key.key : null;
-  } else if (aiProvider === 'gemini' && selectedGeminiKey) {
-    const key = geminiKeys.find(k => k.id === selectedGeminiKey);
-    hasValidApiKey = key && key.status === 'valid';
-    currentApiKey = key ? key.key : null;
-  }
+  // Get an available API key using rotation logic
+  const availableKey = await getAvailableApiKey();
   
-  if (!hasValidApiKey || !currentApiKey) {
+  if (!availableKey) {
     alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
     return;
   }
+  
+  const currentApiKey = availableKey.key;
+  console.log(`🔑 Cover letter using key: ${availableKey.masked}`);
   
   if (!userWorkExperience) {
     alert('Please add your work experience in the Profile tab first.');
@@ -2893,17 +3042,16 @@ function updateBadge() {
           <div class="job-info">
           ${locationAlert}
           ${matchRateDisplay}
+          <div class="job-info-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div class="job-info-title">Job Information <span class="job-type-${jobInfo.jobType === 'Remote' ? 'green' : 'red'}"> - ${escapeHtml(jobInfo.jobType || 'No Sure')}</span></div>
+            <button class="copy-job-btn" title="Copy to Google Sheets" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-size: 14px; cursor: pointer; padding: 6px 8px; border-radius: 6px; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">📋</button>
+          </div>
             Company: ${escapeHtml(jobInfo.company || '')}<br>
           Position: ${escapeHtml(jobInfo.position || '')}<br>
           Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span><br>
-          Company Type: <span style="color: #dc2626; font-weight: 600;">${escapeHtml(jobInfo.companyType || 'Not specified')}</span><br>
-          Size & Team: <span style="color: ${getCompanySizeColor(jobInfo.companySize)}; font-weight: 600;">${escapeHtml(jobInfo.companySize || 'Unknown')} (${escapeHtml(jobInfo.teamSize || 'Not specified')})</span><br>
-          <!-- Job Info Buttons moved here -->
-          <div class="job-info-buttons">
-            <button class="copy-job-btn" title="Copy to Google Sheets">📋</button>
-          </div>
-          Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate || 'Not specified')}</span>
+          ${jobInfo.companyType && jobInfo.companyType !== 'Not specified' ? `Company Type: <span style="color: #dc2626; font-weight: 600;">${escapeHtml(jobInfo.companyType)}</span><br>` : ''}
+          ${((jobInfo.companySize && jobInfo.companySize !== 'Unknown') || (jobInfo.teamSize && jobInfo.teamSize !== 'Not specified')) ? `Size & Team: <span style="color: ${getCompanySizeColor(jobInfo.companySize)}; font-weight: 600;">${escapeHtml(jobInfo.companySize || '')}${jobInfo.teamSize && jobInfo.teamSize !== 'Not specified' ? ` (${escapeHtml(jobInfo.teamSize)})` : ''}</span><br>` : ''}
+          ${jobInfo.foundedDate && jobInfo.foundedDate !== 'Not specified' ? `Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate)}</span>` : ''}
           ${jobInfo.jobSummary ? `
             <div class="job-summary-section" style="margin-top: 12px; padding: 10px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6;">
               <div class="job-summary-title" style="font-weight: 600; color: #1e40af; margin-bottom: 6px; font-size: 13px;">📋 Job Summary:</div>
@@ -3947,6 +4095,13 @@ badgeStyle.textContent = `
   .job-info-buttons .copy-job-btn:hover {
     background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
     transform: scale(1.05);
+  }
+  
+  /* Copy button in header */
+  .job-info-header .copy-job-btn:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
   }
   
   .job-info-buttons .extract-job-btn:hover {

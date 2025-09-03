@@ -261,6 +261,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Store URL-key assignments for content scripts to use
       await storeUrlKeyAssignments(urlKeyAssignments);
       
+      // Notify all content scripts about new URL-key assignments
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('indeed.com') || tab.url.includes('glassdoor.com'))) {
+            try {
+              await chrome.tabs.sendMessage(tab.id, {
+                action: 'urlKeyAssignmentsUpdated',
+                assignments: urlKeyAssignments
+              });
+            } catch (error) {
+              // Tab might not have content script loaded yet, ignore
+            }
+          }
+        }
+        console.log(`📢 Notified content scripts about new URL-key assignments`);
+      } catch (error) {
+        console.error('Failed to notify content scripts:', error);
+      }
+      
       let openedCount = 0;
       let batchNumber = 1;
       
@@ -440,44 +460,37 @@ async function storeUrlKeyAssignments(assignments) {
 
 // Calculate RPM-aware opening strategy based on API limits
 function calculateRpmAwareOpeningStrategy(aiProvider, openaiKeys, geminiKeys, totalUrls) {
-  const validOpenaiKeys = openaiKeys.filter(key => key.status === 'valid').length;
   const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
   
   let strategy = {
     provider: aiProvider,
     totalUrls: totalUrls,
     batchSize: 1,
-    batchDelay: 1000,
+    batchDelay: 300, // Default: 0.3s for OpenAI or no AI key
     totalBatches: Math.ceil(totalUrls / 1),
-    estimatedTime: totalUrls * 1000
+    estimatedTime: (totalUrls - 1) * 300
   };
   
-  if (aiProvider === 'openai') {
-    // OpenAI: 500 RPM per key, 3 requests per minute per key
-    const totalRpm = validOpenaiKeys * 500; // 500 RPM per key
-    const requestsPerMinute = validOpenaiKeys * 3; // Conservative: 3 requests per minute per key
+  if (aiProvider === 'gemini' && validGeminiKeys > 0) {
+    // Gemini: max(200ms, 60s/(15 * api_key_count))
+    const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
+    const calculatedDelay = delayPerKey;
+    const finalDelay = Math.max(200, calculatedDelay);
     
-    if (validOpenaiKeys > 0) {
-      strategy.batchSize = Math.min(validOpenaiKeys, totalUrls);
-      strategy.batchDelay = Math.max(60000 / requestsPerMinute, 20000); // At least 20 seconds between batches
-      strategy.totalBatches = Math.ceil(totalUrls / strategy.batchSize);
-      strategy.estimatedTime = (strategy.totalBatches - 1) * strategy.batchDelay;
-      
-      console.log(`🔑 OpenAI Strategy: ${validOpenaiKeys} keys, ${totalRpm} RPM, ${requestsPerMinute} req/min`);
-    }
-  } else if (aiProvider === 'gemini') {
-    // Gemini: 15 RPM per key, 1 request per 4 seconds per key
-    const totalRpm = validGeminiKeys * 15; // 15 RPM per key
-    const requestsPerMinute = validGeminiKeys * 15; // 15 requests per minute per key
+    strategy.batchDelay = finalDelay;
+    strategy.batchSize = 1; // Open one URL at a time
+    strategy.totalBatches = totalUrls;
+    strategy.estimatedTime = (totalUrls - 1) * finalDelay;
     
-    if (validGeminiKeys > 0) {
-      strategy.batchSize = Math.min(validGeminiKeys, totalUrls);
-      strategy.batchDelay = Math.max(60000 / requestsPerMinute, 4000); // At least 4 seconds between batches
-      strategy.totalBatches = Math.ceil(totalUrls / strategy.batchSize);
-      strategy.estimatedTime = (strategy.totalBatches - 1) * strategy.batchDelay;
-      
-      console.log(`🔑 Gemini Strategy: ${validGeminiKeys} keys, ${totalRpm} RPM, ${requestsPerMinute} req/min`);
-    }
+    console.log(`🔑 Gemini Strategy: ${validGeminiKeys} keys, delay per key: ${delayPerKey}ms, calculated: ${calculatedDelay}ms, final: ${finalDelay}ms`);
+  } else {
+    // OpenAI or no AI key: 0.3s (300ms) delay
+    strategy.batchDelay = 300;
+    strategy.batchSize = 1;
+    strategy.totalBatches = totalUrls;
+    strategy.estimatedTime = (totalUrls - 1) * 300;
+    
+    console.log(`🔑 OpenAI/No AI Strategy: 300ms delay between URLs`);
   }
   
   // Add safety margin and round values
@@ -498,21 +511,19 @@ function calculateRpmAwareOpeningStrategy(aiProvider, openaiKeys, geminiKeys, to
 // Legacy function for backward compatibility
 function calculateSmartUrlDelay(aiProvider, geminiKeys) {
   if (aiProvider !== 'gemini') {
-    return 200;
+    return 300; // OpenAI or no AI key: 0.3s
   }
   
   const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
   
-  if (validGeminiKeys <= 1) {
-    return 200;
+  if (validGeminiKeys <= 0) {
+    return 300; // Fallback to 300ms if no keys
   }
-
   
-  // Adjust based on number of keys (more keys = can open faster)
-  const adjustedDelay = 60 * 1000 / Math.sqrt(validGeminiKeys);
-  
-  // Minimum 200ms, maximum 2 seconds
-  const finalDelay = Math.max(200, Math.min(500, adjustedDelay));
+  // Gemini: max(200ms, 60s/(15 * api_key_count))
+  const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
+  const calculatedDelay = delayPerKey;
+  const finalDelay = Math.max(200, calculatedDelay);
   
   return Math.round(finalDelay);
 }
