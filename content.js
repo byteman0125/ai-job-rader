@@ -27,110 +27,110 @@ let aiAnalysisEnabled = true; // Default to enabled
 let userLocation = null;
 let userWorkExperience = null;
 
-  // Helper function to remove unnecessary elements from HTML content
-  function cleanHtmlContent(htmlContent) {
-    if (!htmlContent || typeof htmlContent !== 'string') return htmlContent;
-    
-    let cleaned = htmlContent;
-    
-    // Remove script and style elements
-    cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    cleaned = cleaned.replace(/<link[^>]*>/gi, '');
-    cleaned = cleaned.replace(/<meta[^>]*>/gi, '');
-    
-    // Remove comments
-    cleaned = cleaned.replace(/<!--[\s\S]*?-->/gi, '');
-    
-    // Remove SVG elements
-    cleaned = cleaned.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
-    
-    // Remove images
-    cleaned = cleaned.replace(/<img[^>]*>/gi, '');
-    
-    // Remove video/audio
-    cleaned = cleaned.replace(/<video[^>]*>[\s\S]*?<\/video>/gi, '');
-    cleaned = cleaned.replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, '');
-    
-    // Remove iframes
-    cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '');
-    
-    // Remove navigation and footer
-    cleaned = cleaned.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-    cleaned = cleaned.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-    
-    // Remove forms
-    // cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
-    // cleaned = cleaned.replace(/<input[^>]*>/gi, '');
-    cleaned = cleaned.replace(/<button[^>]*>[\s\S]*?<\/button>/gi, '');
-    
-    // Remove extension's own UI elements
-    cleaned = cleaned.replace(/<div[^>]*id="[^"]*keyword-highlighter-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*button-row[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-grid[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-item[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-ui[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-progress[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-result[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*count-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<button[^>]*class="[^"]*(?:copy-job-btn|extract-job-btn)[^"]*"[^>]*>[\s\S]*?<\/button>/gi, '');
-    
-    // Remove any text content that might be from the badge UI
-    cleaned = cleaned.replace(/Company:\s*[^<]*<br>/gi, '');
-    cleaned = cleaned.replace(/Position:\s*[^<]*<br>/gi, '');
-    cleaned = cleaned.replace(/Job Information[^<]*/gi, '');
-    cleaned = cleaned.replace(/Job Detection Status[^<]*/gi, '');
-    cleaned = cleaned.replace(/Site:[^<]*/gi, '');
-    cleaned = cleaned.replace(/API Key:[^<]*/gi, '');
-    cleaned = cleaned.replace(/Job Info:[^<]*/gi, '');
-    cleaned = cleaned.replace(/matches found[^<]*/gi, '');
-    cleaned = cleaned.replace(/Total Keywords:[^<]*/gi, '');
-    
-    // Remove more specific badge UI patterns
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-content[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-drag-handle[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*drag-icon[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-type-[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-icon[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-label[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-value[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-dots[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-fill[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-text[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    
-    // Remove any remaining badge-related text
-    cleaned = cleaned.replace(/Page Loading[^<]*/gi, '');
-    cleaned = cleaned.replace(/elapsed[^<]*/gi, '');
-    cleaned = cleaned.replace(/Extraction Failed[^<]*/gi, '');
-    cleaned = cleaned.replace(/Click to retry[^<]*/gi, '');
-    cleaned = cleaned.replace(/Extracting[^<]*/gi, '');
-    cleaned = cleaned.replace(/Available[^<]*/gi, '');
-    cleaned = cleaned.replace(/Job Site[^<]*/gi, '');
-    cleaned = cleaned.replace(/Not Job Site[^<]*/gi, '');
-    cleaned = cleaned.replace(/Missing[^<]*/gi, '');
-    cleaned = cleaned.replace(/Extracted[^<]*/gi, '');
-        
-    // Remove style attributes
-    cleaned = cleaned.replace(/\s*style="[^"]*"/gi, '');
-    
-    // Remove empty elements
-    cleaned = cleaned.replace(/<[^>]*>\s*<\/[^>]*>/gi, '');
-    
-    // Clean up whitespace
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    
-    return cleaned;
-  }
+// Helper function to remove unnecessary elements from HTML content
+function cleanHtmlContent(htmlContent) {
+  if (!htmlContent || typeof htmlContent !== 'string') return htmlContent;
+
+  let cleaned = htmlContent;
+
+  // Remove script and style elements
+  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  cleaned = cleaned.replace(/<link[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<meta[^>]*>/gi, '');
+
+  // Remove comments
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/gi, '');
+
+  // Remove SVG elements
+  cleaned = cleaned.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
+
+  // Remove images
+  cleaned = cleaned.replace(/<img[^>]*>/gi, '');
+
+  // Remove video/audio
+  cleaned = cleaned.replace(/<video[^>]*>[\s\S]*?<\/video>/gi, '');
+  cleaned = cleaned.replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, '');
+
+  // Remove iframes
+  cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '');
+
+  // Remove navigation and footer
+  cleaned = cleaned.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
+  cleaned = cleaned.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+
+  // Remove forms
+  // cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
+  // cleaned = cleaned.replace(/<input[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<button[^>]*>[\s\S]*?<\/button>/gi, '');
+
+  // Remove extension's own UI elements
+  cleaned = cleaned.replace(/<div[^>]*id="[^"]*keyword-highlighter-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*button-row[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-grid[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-item[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-ui[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-progress[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-result[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*count-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<button[^>]*class="[^"]*(?:copy-job-btn|extract-job-btn)[^"]*"[^>]*>[\s\S]*?<\/button>/gi, '');
+
+  // Remove any text content that might be from the badge UI
+  cleaned = cleaned.replace(/Company:\s*[^<]*<br>/gi, '');
+  cleaned = cleaned.replace(/Position:\s*[^<]*<br>/gi, '');
+  cleaned = cleaned.replace(/Job Information[^<]*/gi, '');
+  cleaned = cleaned.replace(/Job Detection Status[^<]*/gi, '');
+  cleaned = cleaned.replace(/Site:[^<]*/gi, '');
+  cleaned = cleaned.replace(/API Key:[^<]*/gi, '');
+  cleaned = cleaned.replace(/Job Info:[^<]*/gi, '');
+  cleaned = cleaned.replace(/matches found[^<]*/gi, '');
+  cleaned = cleaned.replace(/Total Keywords:[^<]*/gi, '');
+
+  // Remove more specific badge UI patterns
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-content[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-drag-handle[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*drag-icon[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-type-[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-icon[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-label[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-value[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-dots[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-fill[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-text[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+
+  // Remove any remaining badge-related text
+  cleaned = cleaned.replace(/Page Loading[^<]*/gi, '');
+  cleaned = cleaned.replace(/elapsed[^<]*/gi, '');
+  cleaned = cleaned.replace(/Extraction Failed[^<]*/gi, '');
+  cleaned = cleaned.replace(/Click to retry[^<]*/gi, '');
+  cleaned = cleaned.replace(/Extracting[^<]*/gi, '');
+  cleaned = cleaned.replace(/Available[^<]*/gi, '');
+  cleaned = cleaned.replace(/Job Site[^<]*/gi, '');
+  cleaned = cleaned.replace(/Not Job Site[^<]*/gi, '');
+  cleaned = cleaned.replace(/Missing[^<]*/gi, '');
+  cleaned = cleaned.replace(/Extracted[^<]*/gi, '');
+
+  // Remove style attributes
+  cleaned = cleaned.replace(/\s*style="[^"]*"/gi, '');
+
+  // Remove empty elements
+  cleaned = cleaned.replace(/<[^>]*>\s*<\/[^>]*>/gi, '');
+
+  // Clean up whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
 
 // Helper function to get color for company size
 function getCompanySizeColor(companySize) {
   if (!companySize) return '#6b7280'; // gray for unknown
-  
+
   const size = companySize.toLowerCase();
   switch (size) {
     case 'startup':
@@ -144,7 +144,7 @@ function getCompanySizeColor(companySize) {
     default:
       return '#6b7280'; // gray for unknown
   }
-  }
+}
 
 // Default keywords with individual colors
 const defaultKeywords = [
@@ -159,55 +159,38 @@ const defaultKeywords = [
   { text: 'relocate', color: 'red' }
 ];
 
-// IndexedDB Storage Manager for large numbers of API keys
+// localStorage Storage Manager for API keys
 class ApiKeyStorageManager {
   constructor() {
-    this.dbName = 'JobRadarApiKeys';
-    this.dbVersion = 1;
-    this.db = null;
+    this.openaiKeysKey = 'jobRadarOpenaiKeys';
+    this.geminiKeysKey = 'jobRadarGeminiKeys';
   }
 
   async init() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(this.db);
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        
-        // Create object stores for API keys
-        if (!db.objectStoreNames.contains('openaiKeys')) {
-          const openaiStore = db.createObjectStore('openaiKeys', { keyPath: 'id' });
-          openaiStore.createIndex('key', 'key', { unique: true });
-          openaiStore.createIndex('status', 'status');
-        }
-        
-        if (!db.objectStoreNames.contains('geminiKeys')) {
-          const geminiStore = db.createObjectStore('geminiKeys', { keyPath: 'id' });
-          geminiStore.createIndex('key', 'key', { unique: true });
-          geminiStore.createIndex('status', 'status');
-        }
-      };
-    });
+    // localStorage doesn't need initialization
+    return Promise.resolve();
+  }
+
+  async saveApiKeys(provider, keys) {
+    try {
+      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+      localStorage.setItem(key, JSON.stringify(keys));
+      console.log(`✅ Saved ${keys.length} ${provider} keys to localStorage`);
+    } catch (error) {
+      console.error(`❌ Failed to save ${provider} keys to localStorage:`, error);
+      throw error;
+    }
   }
 
   async loadApiKeys(provider) {
-    if (!this.db) await this.init();
-    
-    const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-    const transaction = this.db.transaction([storeName], 'readonly');
-    const store = transaction.objectStore(storeName);
-    
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error(`❌ Failed to load ${provider} keys from localStorage:`, error);
+      return [];
+    }
   }
 }
 
@@ -215,7 +198,7 @@ class ApiKeyStorageManager {
 const apiKeyStorage = new ApiKeyStorageManager();
 
 // Global flags to prevent multiple initializations
-let isIndexedDBInitialized = false;
+let isStorageInitialized = false;
 let isMigrationRunning = false;
 
 // Global page counter for sequential key rotation
@@ -242,86 +225,88 @@ function resetPageCounter() {
 // Check if this is a duplicate content script instance
 if (window.jobRadarContentScriptLoaded) {
   console.log('⏸️ Content script already loaded on this page, skipping initialization');
-  // Still need to initialize IndexedDB for this instance
+  // Still need to initialize storage for this instance
   apiKeyStorage.init().then(() => {
-    isIndexedDBInitialized = true;
-    console.log('✅ Content script: IndexedDB initialized (duplicate instance)');
+    isStorageInitialized = true;
+    console.log('✅ Content script: localStorage initialized (duplicate instance)');
   }).catch((error) => {
-    console.error('❌ Content script: Failed to initialize IndexedDB (duplicate instance):', error);
+    console.error('❌ Content script: Failed to initialize localStorage (duplicate instance):', error);
   });
 } else {
   window.jobRadarContentScriptLoaded = true;
 }
 
-// Initialize IndexedDB
+// Initialize localStorage
 apiKeyStorage.init().then(() => {
-  isIndexedDBInitialized = true;
-  console.log('✅ Content script: IndexedDB initialized');
+  isStorageInitialized = true;
+  console.log('✅ Content script: localStorage initialized');
 }).catch((error) => {
-  console.error('❌ Content script: Failed to initialize IndexedDB:', error);
+  console.error('❌ Content script: Failed to initialize localStorage:', error);
 });
 
-// One-time migration from Chrome storage to IndexedDB (if needed)
-async function oneTimeMigrationToIndexedDB() {
+// One-time migration from Chrome storage to localStorage (if needed)
+async function oneTimeMigrationToLocalStorage() {
   // Prevent multiple migrations from running simultaneously
   if (isMigrationRunning) {
     console.log('⏸️ Content script: Migration already running, skipping...');
     return;
   }
-  
+
   isMigrationRunning = true;
-  
+
   try {
-    // Ensure IndexedDB is initialized
-    if (!isIndexedDBInitialized && !apiKeyStorage.db) {
-      console.log('🔄 Content script: Initializing IndexedDB for migration...');
+    // Ensure localStorage is initialized
+    if (!isStorageInitialized) {
+      console.log('🔄 Content script: Initializing localStorage for migration...');
       await apiKeyStorage.init();
-      isIndexedDBInitialized = true;
+      isStorageInitialized = true;
     }
+
+    // Check if Chrome storage already has keys
+    const result = await new Promise((resolve) => {
+      chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve);
+    });
     
-    // Check if IndexedDB already has keys
-    const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
-      apiKeyStorage.loadApiKeys('openai'),
-      apiKeyStorage.loadApiKeys('gemini')
-    ]);
-    
-    // If IndexedDB already has keys, no migration needed
-    if (indexedOpenaiKeys.length > 0 || indexedGeminiKeys.length > 0) {
-      console.log('✅ Content script: IndexedDB already has API keys, no migration needed');
+    const localOpenaiKeys = result.openaiKeys || [];
+    const localGeminiKeys = result.geminiKeys || [];
+
+    // If Chrome storage already has keys, no migration needed
+    if (localOpenaiKeys.length > 0 || localGeminiKeys.length > 0) {
+      console.log('✅ Content script: Chrome storage already has API keys, no migration needed');
       return;
     }
-    
+
     // Check Chrome storage for existing keys
     const [localData, syncData] = await Promise.all([
       new Promise(resolve => chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve)),
       new Promise(resolve => chrome.storage.sync.get(['openaiKeys', 'geminiKeys'], resolve))
     ]);
-    
+
     const openaiKeysLocal = localData.openaiKeys || [];
     const geminiKeysLocal = localData.geminiKeys || [];
     const openaiKeysSync = syncData.openaiKeys || [];
     const geminiKeysSync = syncData.geminiKeys || [];
-    
+
     // Use local storage if available, otherwise sync
     const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
     const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
-    
-    // Migrate to IndexedDB if we found keys in Chrome storage
+
+    // Migrate to localStorage if we found keys in Chrome storage
     if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
-      console.log('🔄 Content script: One-time migration - Moving API keys from Chrome storage to IndexedDB...');
-      
+      console.log('🔄 Content script: One-time migration - Moving API keys from Chrome storage to localStorage...');
+
       if (mergedOpenaiKeys.length > 0) {
-        await apiKeyStorage.saveApiKeys('openai', mergedOpenaiKeys);
-        console.log(`✅ Content script: Migrated ${mergedOpenaiKeys.length} OpenAI keys to IndexedDB`);
+        await chrome.storage.local.set({ openaiKeys: mergedOpenaiKeys });
+        console.log(`✅ Content script: Migrated ${mergedOpenaiKeys.length} OpenAI keys to Chrome storage`);
       }
       if (mergedGeminiKeys.length > 0) {
-        await apiKeyStorage.saveApiKeys('gemini', mergedGeminiKeys);
-        console.log(`✅ Content script: Migrated ${mergedGeminiKeys.length} Gemini keys to IndexedDB`);
+        await chrome.storage.local.set({ geminiKeys: mergedGeminiKeys });
+        console.log(`✅ Content script: Migrated ${mergedGeminiKeys.length} Gemini keys to Chrome storage`);
       }
-      
+
       console.log('🎉 Content script: One-time migration completed successfully!');
     }
-    
+
   } catch (error) {
     console.error('❌ Content script: One-time migration failed:', error);
   } finally {
@@ -339,18 +324,20 @@ async function loadApiKeysFromStorage() {
       await apiKeyStorage.init();
       isIndexedDBInitialized = true;
     }
+
+    // Load directly from Chrome storage (only storage system)
+    const result = await new Promise((resolve) => {
+      chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve);
+    });
     
-    // Load directly from IndexedDB (only storage system)
-    const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
-      apiKeyStorage.loadApiKeys('openai'),
-      apiKeyStorage.loadApiKeys('gemini')
-    ]);
-    
-    console.log('✅ Content script loaded API keys from IndexedDB:', {
+    const indexedOpenaiKeys = result.openaiKeys || [];
+    const indexedGeminiKeys = result.geminiKeys || [];
+
+    console.log('✅ Content script loaded API keys from Chrome storage:', {
       openai: indexedOpenaiKeys.length,
       gemini: indexedGeminiKeys.length
     });
-    
+
     return {
       openaiKeys: indexedOpenaiKeys,
       geminiKeys: indexedGeminiKeys
@@ -374,17 +361,17 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
 
   // Load AI settings
   aiProvider = result.aiProvider || 'openai';
-  
-  // Run one-time migration from Chrome storage to IndexedDB (if needed)
-  await oneTimeMigrationToIndexedDB();
-  
-  // Load API keys from background script (which has access to the same IndexedDB)
+
+  // Run one-time migration from Chrome storage to localStorage (if needed)
+  await oneTimeMigrationToLocalStorage();
+
+  // Load API keys from background script (which has access to the same localStorage)
   console.log('Content script: Loading API keys from background script...');
   chrome.runtime.sendMessage({ action: 'getApiKeys' }, (response) => {
     if (response && response.success) {
       openaiKeys = response.openaiKeys || [];
       geminiKeys = response.geminiKeys || [];
-      
+
       // Debug: Log what we loaded
       console.log('Content script loaded API keys from background:', {
         openai: openaiKeys.length,
@@ -392,7 +379,7 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
         aiProvider: aiProvider,
         hasValidKeys: (openaiKeys.length > 0 && aiProvider === 'openai') || (geminiKeys.length > 0 && aiProvider === 'gemini')
       });
-      
+
       // Auto-select a key if none is selected but we have valid keys
       if (!selectedOpenaiKey && openaiKeys.length > 0) {
         const firstValidKey = openaiKeys.find(key => key.status === 'valid');
@@ -401,7 +388,7 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
           console.log('Auto-selected OpenAI key:', firstValidKey.masked);
         }
       }
-      
+
       if (!selectedGeminiKey && geminiKeys.length > 0) {
         const firstValidKey = geminiKeys.find(key => key.status === 'valid');
         if (firstValidKey) {
@@ -409,7 +396,7 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
           console.log('Auto-selected Gemini key:', firstValidKey.masked);
         }
       }
-      
+
       // Continue with the rest of the initialization
       continueInitialization();
     } else {
@@ -420,12 +407,12 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
       continueInitialization();
     }
   });
-  
+
   // Function to continue initialization after API keys are loaded
   function continueInitialization() {
     selectedOpenaiKey = result.selectedOpenaiKey || null;
     selectedGeminiKey = result.selectedGeminiKey || null;
-    
+
     // Migration: Handle old single API key format
     if (result.openaiApiKey && openaiKeys.length === 0) {
       // The popup will handle the migration, just use the old key temporarily
@@ -447,31 +434,31 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
       };
       openaiKeys.push(keyData);
       selectedOpenaiKey = keyId;
-  }
-  
-  // Load user profile data
-  if (result.userLocation) {
-    userLocation = result.userLocation;
-  }
-  
-  if (result.workExperience) {
-    userWorkExperience = result.workExperience;
-  }
-    
+    }
+
+    // Load user profile data
+    if (result.userLocation) {
+      userLocation = result.userLocation;
+    }
+
+    if (result.workExperience) {
+      userWorkExperience = result.workExperience;
+    }
+
     // Load cover letter toggle state (default to disabled)
     coverLetterEnabled = result.coverLetterEnabled === true;
-    
+
     // Load AI analysis toggle state (default to enabled)
     aiAnalysisEnabled = result.aiAnalysisEnabled !== undefined ? result.aiAnalysisEnabled : true;
 
-  initializeHighlighter();
+    initializeHighlighter();
 
-  // Initialize badge position after a short delay to ensure badge is created
-  setTimeout(() => {
-    if (result.badgePosition) {
-      initializeBadgePosition(result.badgePosition);
-    }
-  }, 100);
+    // Initialize badge position after a short delay to ensure badge is created
+    setTimeout(() => {
+      if (result.badgePosition) {
+        initializeBadgePosition(result.badgePosition);
+      }
+    }, 100);
   }
 });
 
@@ -484,7 +471,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       processedElements = new WeakSet();
       initializeHighlighter();
     }
-    
+
     // Listen for AI settings changes
     if (changes.aiProvider) {
       aiProvider = changes.aiProvider.newValue || 'openai';
@@ -501,7 +488,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     if (changes.selectedGeminiKey) {
       selectedGeminiKey = changes.selectedGeminiKey.newValue || null;
     }
-    
+
     // Listen for profile changes to update cover letter section in real-time
     if (changes.userWorkExperience || changes.userLocation) {
       if (changes.userWorkExperience) {
@@ -510,14 +497,14 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       if (changes.userLocation) {
         userLocation = changes.userLocation.newValue;
       }
-      
+
       // Update badge UI to show/hide cover letter section with debounce
       clearTimeout(window.profileUpdateTimeout);
       window.profileUpdateTimeout = setTimeout(() => {
         updateBadgeForProfile();
       }, 3000);
     }
-    
+
     // Listen for cover letter toggle changes
     if (changes.coverLetterEnabled) {
       coverLetterEnabled = changes.coverLetterEnabled.newValue === true;
@@ -537,10 +524,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     sendResponse({ totalMatches: totalMatches });
-    
+
   } else if (request.action === 'updateJobRadarState') {
     jobRadarEnabled = request.enabled;
-    
+
     if (jobRadarEnabled) {
       // Enable Job Radar - ensure badge exists and is visible
       let existing = document.getElementById('keyword-highlighter-badge');
@@ -557,15 +544,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         existing.style.display = 'none';
       }
     }
-    
+
   } else if (request.action === 'updateCoverLetterState') {
     coverLetterEnabled = request.enabled;
-    
+
     // Update cover letter section visibility immediately
     updateCoverLetterSectionVisibility();
   } else if (request.action === 'updateAiAnalysisState') {
     aiAnalysisEnabled = request.enabled;
-    
+
     // If AI analysis is disabled, stop any ongoing extraction
     if (!aiAnalysisEnabled && isRequestInProgress) {
       isRequestInProgress = false;
@@ -578,12 +565,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (response && response.success) {
         openaiKeys = response.openaiKeys || [];
         geminiKeys = response.geminiKeys || [];
-        console.log('Content script: API keys received from background:', { 
-          openai: openaiKeys.length, 
+        console.log('Content script: API keys received from background:', {
+          openai: openaiKeys.length,
           gemini: geminiKeys.length,
           aiProvider: aiProvider
         });
-        
+
         // Auto-select a key if none is selected but we have valid keys
         if (!selectedOpenaiKey && openaiKeys.length > 0) {
           const firstValidKey = openaiKeys.find(key => key.status === 'valid');
@@ -592,7 +579,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log('Content script: Auto-selected OpenAI key:', firstValidKey.masked);
           }
         }
-        
+
         if (!selectedGeminiKey && geminiKeys.length > 0) {
           const firstValidKey = geminiKeys.find(key => key.status === 'valid');
           if (firstValidKey) {
@@ -600,16 +587,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log('Content script: Auto-selected Gemini key:', firstValidKey.masked);
           }
         }
-        
+
         // Check if we have valid keys for the current provider
-        const hasValidKeys = (openaiKeys.length > 0 && aiProvider === 'openai') || 
-                            (geminiKeys.length > 0 && aiProvider === 'gemini');
-        
+        const hasValidKeys = (openaiKeys.length > 0 && aiProvider === 'openai') ||
+          (geminiKeys.length > 0 && aiProvider === 'gemini');
+
         console.log('Content script: Has valid keys for current provider:', hasValidKeys);
-        
+
         // Update badge to reflect new API key status
         updateBadge();
-        
+
         if (hasValidKeys) {
           console.log('Content script: Valid API keys found, badge should be updated');
         } else {
@@ -622,11 +609,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'urlKeyAssignmentsUpdated') {
     // Handle new URL-key assignments from background script
     console.log('Content script: Received URL-key assignments update:', request.assignments);
-    
+
     // Store the assignments locally for immediate access
     const currentUrl = window.location.href;
     const assignment = request.assignments.find(a => a.url === currentUrl);
-    
+
     if (assignment) {
       console.log(`🎯 URL-key assignment received for current page:`, {
         url: currentUrl,
@@ -635,7 +622,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         keyMasked: assignment.keyMasked,
         provider: assignment.provider
       });
-      
+
       // Force a badge update to reflect the new assignment
       updateBadge();
     } else {
@@ -645,7 +632,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Update keyword color in existing highlights
     const keyword = request.keyword;
     const newColor = request.newColor;
-    
+
     // Find all highlights for this keyword and update their colors
     document.querySelectorAll('.keyword-highlight').forEach(highlight => {
       if (highlight.textContent.toLowerCase().includes(keyword.toLowerCase())) {
@@ -661,7 +648,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.userLocation !== undefined) {
       userLocation = request.userLocation;
     }
-    
+
     // Update badge UI immediately to show/hide cover letter section
     updateBadgeForProfile();
   }
@@ -671,9 +658,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Get page load status for display
 function getPageLoadStatus() {
   if (loadFailed) {
-      return `❌ Extraction Failed (${lastLoadError || 'Unknown error'}) - Click 🔄 to retry`;
+    return `❌ Extraction Failed (${lastLoadError || 'Unknown error'}) - Click 🔄 to retry`;
   } else if (loadAttempts >= 8) {
-      return `⚠️ Max Attempts Reached (${loadAttempts}/8) - 30s elapsed - Click 🔄 to retry`;
+    return `⚠️ Max Attempts Reached (${loadAttempts}/8) - 30s elapsed - Click 🔄 to retry`;
   } else if (loadAttempts > 0) {
     const elapsedSeconds = Math.floor(loadAttempts * 8);
     return `🔄 Page Loading... (${loadAttempts}/8) - ${elapsedSeconds}s elapsed`;
@@ -702,41 +689,41 @@ function manualExtractJobInfo() {
     console.log('⏸️ Manual job extraction skipped - AI Analysis is disabled');
     return;
   }
-  
+
   // Check if we have any valid API keys for the current provider
   const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
   const hasValidApiKey = keys.some(key => key.status === 'valid');
-  
+
   if (!hasValidApiKey) {
     alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
     return;
   }
-    
-    // Clear any existing intervals to prevent conflicts
-    if (window.extractionInterval) {
-      clearInterval(window.extractionInterval);
-      window.extractionInterval = null;
-    }
-  
+
+  // Clear any existing intervals to prevent conflicts
+  if (window.extractionInterval) {
+    clearInterval(window.extractionInterval);
+    window.extractionInterval = null;
+  }
+
   // Reset load status and start fresh extraction
   resetLoadStatus();
   loadAttempts = 1;
-  
+
   // Show immediate feedback
-  
+
   // Update badge to show extraction in progress
   updateBadge();
-  
+
   // Start extraction immediately
   extractJobInfo();
-  
+
   // Show user feedback
   const extractBtn = document.querySelector('.extract-job-btn');
   if (extractBtn) {
     extractBtn.textContent = '⏳';
     extractBtn.title = 'Extracting...';
     extractBtn.disabled = true;
-    
+
     // Re-enable button after extraction completes
     setTimeout(() => {
       if (extractBtn) {
@@ -753,13 +740,13 @@ function updateExtractionProgress() {
   if (loadAttempts > 0 && !loadFailed) {
     // Update badge with smooth progress animation
     updateBadge();
-    
+
     // Add smooth progress bar animation
     const progressFill = document.querySelector('.progress-fill');
     if (progressFill) {
       const progress = Math.min((loadAttempts / maxLoadAttempts) * 100, 100);
       progressFill.style.width = `${progress}%`;
-      
+
       // Add pulse effect for active extraction
       if (loadAttempts < maxLoadAttempts) {
         progressFill.style.animation = 'progressPulse 2s ease-in-out infinite';
@@ -774,26 +761,29 @@ function updateExtractionProgress() {
 function startContinuousJobExtraction() {
   console.log(`🚀🚀🚀 START CONTINUOUS JOB EXTRACTION CALLED 🚀🚀🚀`);
   console.log(`🚀 Starting continuous job extraction at ${new Date().toLocaleTimeString()}`);
-  
+  console.log(`🔍 Current URL: ${window.location.href}`);
+  console.log(`🔍 AI Provider: ${aiProvider}`);
+  console.log(`🔍 Available keys: OpenAI=${openaiKeys.length}, Gemini=${geminiKeys.length}`);
+
   let attempts = 0;
   // Adjust interval based on provider to respect rate limits
-  const interval = aiProvider === 'gemini' ? 6000 : 600; // 6 seconds for Gemini (RPM limit), 4 seconds for OpenAI
-  const maxAttempts = aiProvider === 'gemini' ? 6 : 6; // Fewer attempts for Gemini due to longer interval
-    
-    // Clear any existing interval to prevent multiple intervals
-    if (window.extractionInterval) {
-      console.log('🔄 Clearing existing extraction interval');
-      clearInterval(window.extractionInterval);
-    }
-  
+  const interval = aiProvider === 'gemini' ? 8000 : 400; // Increased Gemini interval to 8 seconds to prevent rate limiting
+  const maxAttempts = aiProvider === 'gemini' ? 6 : 8; // Reduced attempts for Gemini to prevent overwhelming
+
+  // Clear any existing interval to prevent multiple intervals
+  if (window.extractionInterval) {
+    console.log('🔄 Clearing existing extraction interval');
+    clearInterval(window.extractionInterval);
+  }
+
   // Calculate smart delay for multiple job pages
   const smartDelay = calculateSmartDelay();
   console.log(`⏰ Smart delay calculated: ${smartDelay}ms`);
-  
+
   // Function to run extraction attempt
   const runExtractionAttempt = () => {
     console.log(`🔄 runExtractionAttempt called (attempt ${attempts + 1})`);
-    
+
     // Check if we already have successful job info - if so, stop retrying
     if (jobInfo && jobInfo.position) {
       console.log(`✅ Job extraction already successful, stopping retry attempts`);
@@ -803,13 +793,13 @@ function startContinuousJobExtraction() {
       updateBadge();
       return;
     }
-    
+
     attempts++;
-    
+
     // Update badge to show progress
     loadAttempts = attempts;
     updateBadge();
-    
+
     console.log(`🔄 About to call extractJobInfo...`);
     // Try to extract job info
     extractJobInfo().then(() => {
@@ -822,27 +812,27 @@ function startContinuousJobExtraction() {
       }
     }).catch((error) => {
     });
-    
+
     // Stop after max attempts or if we have job info
     if (attempts >= maxAttempts || (jobInfo && jobInfo.position)) {
       clearInterval(extractionInterval);
-      
+
       if (!jobInfo || !jobInfo.position) {
         loadFailed = true;
         lastLoadError = 'All attempts failed after 30 seconds';
       }
-      
+
       updateBadge();
     }
   };
-  
+
   // Start with smart delay instead of immediate attempt
   setTimeout(() => {
     runExtractionAttempt();
-    
+
     // Then continue with interval-based attempts
     const extractionInterval = setInterval(runExtractionAttempt, interval);
-    
+
     // Store the interval reference globally to prevent multiple intervals
     window.extractionInterval = extractionInterval;
   }, smartDelay);
@@ -850,44 +840,45 @@ function startContinuousJobExtraction() {
 
 // Calculate smart delay based on number of keys and estimated job pages
 function calculateSmartDelay() {
-  return 500;
+  // Reduced from 500ms to 200ms for faster processing
+  return 200;
 }
 
 // Start continuous keyword monitoring every 2 seconds for up to 30 seconds
 function startContinuousKeywordMonitoring() {
-  
+
   let attempts = 0;
   const maxAttempts = 15; // 30 seconds / 2 seconds = 15 attempts
   const interval = 2000; // 2 seconds
-  
+
   const keywordInterval = setInterval(() => {
     attempts++;
-    
+
     // Check if we have keywords to highlight
     if (keywords.length > 0) {
       // Try to highlight keywords
       highlightKeywords();
-      
+
       // Check if we found any matches
       const currentMatches = countKeywordMatches();
-      
+
       if (currentMatches > 0) {
         clearInterval(keywordInterval);
         updateBadge(); // Update badge with keyword matches
       }
     } else {
     }
-    
+
     // Stop after max attempts or if we found matches
     if (attempts >= maxAttempts) {
       clearInterval(keywordInterval);
-      
+
       // Final keyword count update
       const finalMatches = countKeywordMatches();
       updateBadge();
     }
   }, interval);
-  
+
   // Also try immediate highlighting
   setTimeout(() => {
     if (keywords.length > 0) {
@@ -903,7 +894,7 @@ function detectJobSite() {
   const url = window.location.href.toLowerCase();
   const hostname = window.location.hostname.toLowerCase();
   const pageText = document.body.innerText.toLowerCase();
-  
+
   // First, check for obvious non-job sites to avoid false positives
   const nonJobSites = [
     'google.com', 'gmail.com', 'drive.google.com', 'docs.google.com', 'sheets.google.com',
@@ -912,25 +903,25 @@ function detectJobSite() {
     'netflix.com', 'spotify.com', 'discord.com', 'slack.com', 'zoom.us',
     'outlook.com', 'office.com', 'onedrive.com', 'teams.microsoft.com'
   ];
-  
+
   // If it's a known non-job site, return false immediately
   if (nonJobSites.some(site => hostname.includes(site))) {
     return false;
   }
-  
+
   // Job-related keywords for detection
   const jobKeywords = [
-    'job', 'career', 'position', 'apply', 'hiring', 
+    'job', 'career', 'position', 'apply', 'hiring',
     'employment', 'work', 'opportunity', 'vacancy',
     'opening', 'role', 'posting', 'recruitment',
     'engineer', 'developer', 'software', 'full stack',
     'remote', 'hybrid', 'onsite', 'full time', 'part time'
   ];
-  
+
   // Check URL and page content for job-related keywords
   const urlMatch = jobKeywords.some(keyword => url.includes(keyword));
   const contentMatch = jobKeywords.some(keyword => pageText.includes(keyword));
-  
+
   // Also check for common job site domains
   const jobDomains = [
     'linkedin.com/jobs', 'indeed.com', 'glassdoor.com',
@@ -938,17 +929,17 @@ function detectJobSite() {
     'workday.com', 'bamboohr.com', 'smartrecruiters.com',
     'simplyhired.com'
   ];
-  
+
   const domainMatch = jobDomains.some(domain => url.includes(domain));
-  
+
   // Special check for SimplyHired
   const isSimplyHired = hostname.includes('simplyhired');
   const hasFlexContainer = isSimplyHired && document.querySelector('.flex-container') !== null;
-  
-  const isJobSite = urlMatch || contentMatch || domainMatch || (isSimplyHired && hasFlexContainer);
-  
 
-  
+  const isJobSite = urlMatch || contentMatch || domainMatch || (isSimplyHired && hasFlexContainer);
+
+
+
   return isJobSite;
 }
 
@@ -956,38 +947,46 @@ function detectJobSite() {
 async function getAvailableApiKey() {
   const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
   const currentUrl = window.location.href;
-  
+
   // Check if we already have a selected key for this page
+  // BUT if it's rate limited, don't use it - force rotation
   if (currentPageSelectedKey && currentPageUrl === currentUrl) {
-    console.log(`🔄 Using cached key for same page: ${currentPageSelectedKey.masked}`);
-    return currentPageSelectedKey;
+    if (currentPageSelectedKey.usage?.isRateLimited) {
+      console.log(`🚫 Cached key is rate limited, forcing rotation: ${currentPageSelectedKey.masked}`);
+      // Clear the cache to force key rotation
+      currentPageSelectedKey = null;
+      currentPageUrl = null;
+    } else {
+      console.log(`🔄 Using cached key for same page: ${currentPageSelectedKey.masked}`);
+      return currentPageSelectedKey;
+    }
   }
-  
+
   console.log(`🔍 getAvailableApiKey called for ${aiProvider}:`, {
     totalKeys: keys.length,
     keys: keys.map(k => ({ id: k.id, masked: k.masked, status: k.status, isRateLimited: k.usage?.isRateLimited }))
   });
-  
+
   if (aiProvider === 'openai') {
     // For OpenAI: Use key rotation for multiple URLs
     const availableKeys = keys.filter(key => key.status === 'valid');
-    
+
     if (availableKeys.length === 0) {
       console.log('❌ No valid OpenAI keys found');
       return null;
     }
-    
+
     if (availableKeys.length === 1) {
       console.log(`Using single OpenAI key: ${availableKeys[0].masked}`);
       return availableKeys[0];
     }
-    
+
     // Check if this is a multi-open scenario (has URL-key assignments)
     const hasUrlAssignments = await checkForUrlAssignments();
-    
+
     let keyIndex;
     let assignmentMethod;
-    
+
     if (hasUrlAssignments) {
       // Multi-open: Use order index for predictable assignment
       keyIndex = getNextKeyIndex(availableKeys.length);
@@ -999,9 +998,9 @@ async function getAvailableApiKey() {
       keyIndex = microseconds % availableKeys.length;
       assignmentMethod = 'microseconds';
     }
-    
+
     const assignedKey = availableKeys[keyIndex];
-    
+
     console.log(`🔑 OpenAI key assignment (${assignmentMethod}):`, {
       pageCounter: globalPageCounter,
       keyIndex: keyIndex,
@@ -1011,33 +1010,71 @@ async function getAvailableApiKey() {
       method: assignmentMethod,
       ...(assignmentMethod === 'microseconds' && { microseconds: Math.floor(performance.now() * 1000) })
     });
-    
+
     // Cache the selected key for this page
     currentPageSelectedKey = assignedKey;
     currentPageUrl = currentUrl;
-    
+
     return assignedKey;
   } else {
-    // For Gemini: Smart key distribution based on page URL
-    const availableKeys = keys.filter(key => 
-      key.status === 'valid' && 
-      !key.usage?.isRateLimited &&
-      (key.usage?.requestsToday || 0) < 250 && (key.usage?.tokensToday || 0) < 250000
-    );
-    
+    // For Gemini: Smart key distribution based on page URL with recovery mechanism
+    const now = Date.now();
+    const availableKeys = keys.filter(key => {
+      if (key.status !== 'valid') return false;
+      
+      // Check if key is rate limited and if enough time has passed for recovery
+      if (key.usage?.isRateLimited && key.usage?.rateLimitReset) {
+        const resetTime = new Date(key.usage.rateLimitReset).getTime();
+        if (now < resetTime) {
+          return false; // Still in rate limit period
+        } else {
+          // Rate limit period has passed, reset the key
+          key.usage.isRateLimited = false;
+          key.usage.rateLimitAttempts = 0;
+          key.usage.rateLimitReset = null;
+          console.log(`🔄 Key ${key.masked} recovered from rate limit`);
+        }
+      }
+      
+      // Check daily limits - be more lenient
+      const requestsToday = key.usage?.requestsToday || 0;
+      const tokensToday = key.usage?.tokensToday || 0;
+      
+      // Only filter out if we're very close to limits (allow 90% usage)
+      const maxRequests = 250;
+      const maxTokens = 250000;
+      
+      if (requestsToday >= maxRequests * 0.9 || tokensToday >= maxTokens * 0.9) {
+        console.log(`⚠️ Key ${key.masked} near daily limits: ${requestsToday}/${maxRequests} requests, ${tokensToday}/${maxTokens} tokens`);
+        return false;
+      }
+      
+      return true;
+    });
+
     console.log(`🔍 Gemini key filtering:`, {
       totalKeys: keys.length,
       availableKeys: availableKeys.length,
-      availableKeysDetails: availableKeys.map(k => ({ 
-        id: k.id, 
-        masked: k.masked, 
-        status: k.status, 
+      availableKeysDetails: availableKeys.map(k => ({
+        id: k.id,
+        masked: k.masked,
+        status: k.status,
         isRateLimited: k.usage?.isRateLimited,
         requestsToday: k.usage?.requestsToday || 0,
         tokensToday: k.usage?.tokensToday || 0
+      })),
+      filteredOutKeys: keys.filter(k => k.status === 'valid' && !availableKeys.includes(k)).map(k => ({
+        id: k.id,
+        masked: k.masked,
+        status: k.status,
+        isRateLimited: k.usage?.isRateLimited,
+        requestsToday: k.usage?.requestsToday || 0,
+        tokensToday: k.usage?.tokensToday || 0,
+        reason: k.usage?.isRateLimited ? 'rate_limited' : 
+                (k.usage?.requestsToday || 0) >= 250 * 0.9 ? 'near_daily_limit' : 'unknown'
       }))
     });
-    
+
     // Show auto-rotation summary
     console.log(`🔄 Auto-rotation summary:`, {
       totalKeys: keys.length,
@@ -1048,30 +1085,30 @@ async function getAvailableApiKey() {
       globalPageCounter: globalPageCounter,
       rotationType: 'Sequential (openedCount + 1) % numberOfKeys'
     });
-    
+
     if (availableKeys.length === 0) {
       console.log('❌ No available Gemini keys found');
       return null;
     }
-    
+
     // Use pre-assigned key distribution for multiple job pages
     try {
       const assignedKey = await getPreAssignedKey(availableKeys);
-      
+
       if (assignedKey) {
         console.log(`🎯 Using pre-assigned Gemini key: ${assignedKey.masked} (${assignedKey.usage?.requestsToday || 0}/250 requests today)`);
         console.log(`🔄 Pre-assignment: Using key ${assignedKey.id} for page ${window.location.href}`);
-        
+
         // Cache the selected key for this page
         currentPageSelectedKey = assignedKey;
         currentPageUrl = currentUrl;
-        
+
         return assignedKey;
       }
     } catch (error) {
       console.error('Error in pre-assignment:', error);
     }
-    
+
     // Fallback to least usage if no page assignment
     try {
       const keyWithLeastUsage = availableKeys.reduce((least, current) => {
@@ -1079,28 +1116,28 @@ async function getAvailableApiKey() {
         const currentUsage = current.usage?.requestsToday || 0;
         return currentUsage < leastUsage ? current : least;
       });
-      
+
       console.log(`🔄 Fallback to Gemini key with least usage: ${keyWithLeastUsage.masked} (${keyWithLeastUsage.usage?.requestsToday || 0}/250 requests today)`);
       console.log(`🔄 Auto-rotation: Fallback assigned key ${keyWithLeastUsage.id} to page ${window.location.href}`);
-      
+
       // Cache the selected key for this page
       currentPageSelectedKey = keyWithLeastUsage;
       currentPageUrl = currentUrl;
-      
+
       return keyWithLeastUsage;
     } catch (error) {
       console.error('Error in fallback selection:', error);
     }
-    
+
     // Final fallback: just return the first available key
     if (availableKeys.length > 0) {
       console.log(`🚨 Final fallback: Using first available Gemini key: ${availableKeys[0].masked}`);
       console.log(`🔄 Auto-rotation: Final fallback assigned key ${availableKeys[0].id} to page ${window.location.href}`);
-      
+
       // Cache the selected key for this page
       currentPageSelectedKey = availableKeys[0];
       currentPageUrl = currentUrl;
-      
+
       return availableKeys[0];
     }
   }
@@ -1111,28 +1148,28 @@ async function getPreAssignedKey(availableKeys) {
   if (availableKeys.length <= 1) {
     return availableKeys[0];
   }
-  
+
   try {
     // Get URL-key assignments from background script
     const result = await chrome.storage.local.get(['urlKeyAssignments', 'urlKeyAssignmentsTimestamp']);
     const assignments = result.urlKeyAssignments || [];
     const timestamp = result.urlKeyAssignmentsTimestamp || 0;
-    
+
     console.log(`🔍 Checking for pre-assigned keys:`, {
       totalAssignments: assignments.length,
       timestamp: new Date(timestamp).toISOString(),
       ageMinutes: Math.round((Date.now() - timestamp) / 60000),
       currentUrl: window.location.href
     });
-    
+
     // Check if assignments are recent (within last 5 minutes)
     const isRecent = (Date.now() - timestamp) < 5 * 60 * 1000;
-    
+
     if (assignments.length > 0 && isRecent) {
       // Find assignment for current URL
       const currentUrl = window.location.href;
       const assignment = assignments.find(a => a.url === currentUrl);
-      
+
       console.log(`🔍 Looking for assignment for URL: ${currentUrl}`);
       console.log(`🔍 Available assignments:`, assignments.map(a => ({
         url: a.url,
@@ -1140,11 +1177,11 @@ async function getPreAssignedKey(availableKeys) {
         keyId: a.keyId,
         keyMasked: a.keyMasked
       })));
-      
+
       if (assignment && assignment.keyId) {
         // Find the assigned key in available keys
         const assignedKey = availableKeys.find(key => key.id === assignment.keyId);
-        
+
         if (assignedKey) {
           console.log(`🔑 Pre-assigned key found:`, {
             currentUrl: currentUrl,
@@ -1177,7 +1214,7 @@ async function getPreAssignedKey(availableKeys) {
   } catch (error) {
     console.error('Error getting pre-assigned key:', error);
   }
-  
+
   // Fallback to sequential rotation if pre-assignment fails
   return await getSequentialAssignedKey(availableKeys);
 }
@@ -1187,13 +1224,13 @@ async function getSequentialAssignedKey(availableKeys) {
   if (availableKeys.length <= 1) {
     return availableKeys[0];
   }
-  
+
   // Check if this is a multi-open scenario (has URL-key assignments)
   const hasUrlAssignments = await checkForUrlAssignments();
-  
+
   let keyIndex;
   let assignmentMethod;
-  
+
   if (hasUrlAssignments) {
     // Multi-open: Use order index for predictable assignment
     keyIndex = getNextKeyIndex(availableKeys.length);
@@ -1206,8 +1243,12 @@ async function getSequentialAssignedKey(availableKeys) {
     assignmentMethod = 'microseconds';
   }
   
+  // Add some randomness to prevent always using the same key
+  const randomOffset = Math.floor(Math.random() * Math.min(3, availableKeys.length)); // Random offset up to 3
+  keyIndex = (keyIndex + randomOffset) % availableKeys.length;
+
   const assignedKey = availableKeys[keyIndex];
-  
+
   console.log(`🔑 Key assignment (${assignmentMethod}):`, {
     pageCounter: globalPageCounter,
     keyIndex: keyIndex,
@@ -1218,7 +1259,7 @@ async function getSequentialAssignedKey(availableKeys) {
     method: assignmentMethod,
     ...(assignmentMethod === 'microseconds' && { microseconds: Math.floor(performance.now() * 1000) })
   });
-  
+
   return assignedKey;
 }
 
@@ -1228,10 +1269,10 @@ async function checkForUrlAssignments() {
     const result = await chrome.storage.local.get(['urlKeyAssignments', 'urlKeyAssignmentsTimestamp']);
     const assignments = result.urlKeyAssignments || [];
     const timestamp = result.urlKeyAssignmentsTimestamp || 0;
-    
+
     // Check if assignments are recent (within last 5 minutes)
     const isRecent = (Date.now() - timestamp) < 5 * 60 * 1000;
-    
+
     return assignments.length > 0 && isRecent;
   } catch (error) {
     console.error('Error checking URL assignments:', error);
@@ -1275,47 +1316,47 @@ function initializeUrlOpeningTracker() {
     // Clear cached key when page loads (new page = new key selection)
     clearPageKeyCache();
   });
-  
+
   // Also track when the script loads (for direct navigation)
   setTimeout(() => {
     trackUrlOpening();
   }, 1000);
-  
+
   // Add more aggressive tracking for rapid page loads
   let pageLoadCount = 0;
   let lastPageLoadTime = 0;
-  
+
   // Store original function reference
   const originalStartContinuousJobExtraction = startContinuousJobExtraction;
-  
+
   // Override the startContinuousJobExtraction to add delays
-  window.startContinuousJobExtraction = function() {
+  window.startContinuousJobExtraction = function () {
     // Check if we need to delay before starting extraction
     const currentTime = Date.now();
     const timeSinceLastLoad = currentTime - lastPageLoadTime;
     const suggestedDelay = calculateSuggestedUrlDelay();
-    
+
     if (pageLoadCount > 0 && timeSinceLastLoad < suggestedDelay) {
       const requiredDelay = suggestedDelay - timeSinceLastLoad;
       console.log(`🚫 Page load too fast! Delaying job extraction by ${requiredDelay}ms`);
-      
+
       // Show delay in badge
-      updateBadge(`Delaying ${Math.round(requiredDelay/1000)}s`, '#ff6b6b');
-      
+      updateBadge(`Delaying ${Math.round(requiredDelay / 1000)}s`, '#ff6b6b');
+
       // Delay the actual job extraction
       setTimeout(() => {
         console.log(`✅ Delay completed, starting job extraction`);
         updateBadge();
         originalStartContinuousJobExtraction.call(this);
       }, requiredDelay);
-      
+
       return;
     }
-    
+
     // Update tracking
     pageLoadCount++;
     lastPageLoadTime = currentTime;
-    
+
     // Start extraction normally
     originalStartContinuousJobExtraction.call(this);
   };
@@ -1324,21 +1365,21 @@ function initializeUrlOpeningTracker() {
 // Track when a job URL is opened
 function trackUrlOpening() {
   if (!isJobSite) return;
-  
+
   const currentTime = Date.now();
   const timeSinceLastOpen = currentTime - urlOpeningTracker.lastUrlOpenTime;
-  
+
   urlOpeningTracker.urlOpenCount++;
   urlOpeningTracker.lastUrlOpenTime = currentTime;
-  
+
   // Calculate suggested delay for next URL opening
   const suggestedDelay = calculateSuggestedUrlDelay();
   urlOpeningTracker.suggestedDelay = suggestedDelay;
-  
+
   console.log(`🌐 URL Opening #${urlOpeningTracker.urlOpenCount} tracked`);
   console.log(`⏱️ Time since last open: ${timeSinceLastOpen}ms`);
   console.log(`💡 Suggested delay for next URL: ${suggestedDelay}ms`);
-  
+
   // Enforce actual delay if opening too fast
   if (timeSinceLastOpen < suggestedDelay && urlOpeningTracker.urlOpenCount > 1) {
     const requiredDelay = suggestedDelay - timeSinceLastOpen;
@@ -1354,23 +1395,23 @@ function enforceUrlDelay(delayMs) {
     urlOpeningTracker.pendingDelays.push(delayMs);
     return;
   }
-  
+
   urlOpeningTracker.isDelaying = true;
-  updateBadge(`Waiting ${Math.round(delayMs/1000)}s`, '#ffa500');
-  
+  updateBadge(`Waiting ${Math.round(delayMs / 1000)}s`, '#ffa500');
+
   console.log(`⏳ Enforcing ${delayMs}ms delay before job extraction`);
-  
+
   setTimeout(() => {
     urlOpeningTracker.isDelaying = false;
     updateBadge();
-    
+
     // Process any pending delays
     if (urlOpeningTracker.pendingDelays.length > 0) {
       const nextDelay = urlOpeningTracker.pendingDelays.shift();
       console.log(`⏳ Processing pending delay: ${nextDelay}ms`);
       enforceUrlDelay(nextDelay);
     }
-    
+
     // Now allow job extraction to proceed
     console.log(`✅ Delay completed, job extraction can proceed`);
     console.log(`🚀 Calling startContinuousJobExtraction after delay...`);
@@ -1382,26 +1423,26 @@ function enforceUrlDelay(delayMs) {
 function calculateSuggestedUrlDelay() {
   // Get current AI provider and API keys
   const currentProvider = aiProvider || 'openai';
-  
+
   if (currentProvider === 'gemini' && geminiKeys.length > 0) {
-    // Gemini: max(200ms, 60s/(15 * api_key_count))
+    // Gemini: Increased delay to prevent rate limiting - max(2000ms, 60s/(15 * api_key_count))
     const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
     if (validGeminiKeys > 0) {
-      const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
+      const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count) - back to 60s
       const calculatedDelay = delayPerKey;
-      return Math.max(200, calculatedDelay);
+      return Math.max(2000, calculatedDelay); // Increased minimum to 2000ms to prevent rate limiting
     }
   }
-  
-  // OpenAI or no AI key: 0.3s (300ms)
-  return 300;
+
+  // OpenAI or no AI key: 0.1s (100ms) - reduced from 300ms
+  return 100;
 }
 
 // Show timing suggestion in badge
 function showUrlTimingSuggestion() {
   const suggestedDelaySeconds = Math.round(urlOpeningTracker.suggestedDelay / 1000);
   updateBadge(`Wait ${suggestedDelaySeconds}s`, '#ffa500');
-  
+
   // Clear suggestion after delay
   setTimeout(() => {
     if (jobInfo && jobInfo.position) {
@@ -1414,7 +1455,7 @@ function showUrlTimingSuggestion() {
 function getUrlTimingInfo() {
   const suggestedDelaySeconds = Math.round(urlOpeningTracker.suggestedDelay / 1000);
   const geminiKeyCount = geminiKeys.filter(key => key.status === 'valid').length;
-  
+
   return {
     suggestedDelay: suggestedDelaySeconds,
     keyCount: geminiKeyCount,
@@ -1426,7 +1467,7 @@ function getUrlTimingInfo() {
 async function updateKeyUsage(keyId, tokensUsed = 0) {
   const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
   const key = keys.find(k => k.id === keyId);
-  
+
   if (key) {
     if (!key.usage) {
       key.usage = {
@@ -1437,7 +1478,7 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
         isRateLimited: false
       };
     }
-    
+
     // Reset daily counters if it's a new day
     const today = new Date().toDateString();
     if (key.usage.lastReset !== today) {
@@ -1446,16 +1487,16 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
       key.usage.lastReset = today;
       key.usage.isRateLimited = false;
     }
-    
+
     key.usage.requestsToday += 1;
     key.usage.tokensToday += tokensUsed;
-    
+
     console.log(`📊 Updated usage for ${key.masked}:`, {
       requestsToday: key.usage.requestsToday,
       tokensToday: key.usage.tokensToday,
       tokensUsed: tokensUsed
     });
-    
+
     // Calculate cost for OpenAI (GPT-4 pricing: $0.03/1K input tokens, $0.06/1K output tokens)
     if (aiProvider === 'openai' && tokensUsed > 0) {
       // Estimate: assume 70% input tokens, 30% output tokens for job extraction
@@ -1464,12 +1505,12 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
       const inputCost = (inputTokens / 1000) * 0.03;
       const outputCost = (outputTokens / 1000) * 0.06;
       const requestCost = inputCost + outputCost;
-      
+
       key.usage.costToday = (key.usage.costToday || 0) + requestCost;
       console.log(`💰 Cost for this request: $${requestCost.toFixed(4)} (Total today: $${key.usage.costToday.toFixed(4)})`);
     }
-    
-        // Check if key is approaching limits (only for Gemini)
+
+    // Check if key is approaching limits (only for Gemini)
     if (aiProvider === 'gemini') {
       const maxRequests = 250;
       const maxTokens = 250000;
@@ -1480,7 +1521,7 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
         console.log(`🚫 Gemini key ${key.masked} reached daily limits and marked as rate limited`);
       }
     }
-    
+
     // Save updated usage to IndexedDB
     try {
       // Ensure IndexedDB is initialized
@@ -1489,10 +1530,12 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
         await apiKeyStorage.init();
         isIndexedDBInitialized = true;
       }
-      
-      await apiKeyStorage.saveApiKeys(aiProvider, keys);
-      console.log(`💾 Updated usage saved to IndexedDB for ${aiProvider} key: ${key.masked}`);
-      
+
+      // Save updated keys to Chrome storage
+      const storageKey = aiProvider === 'openai' ? 'openaiKeys' : 'geminiKeys';
+      await chrome.storage.local.set({ [storageKey]: keys });
+      console.log(`💾 Updated usage saved to Chrome storage for ${aiProvider} key: ${key.masked}`);
+
       // Notify popup that usage has been updated
       chrome.runtime.sendMessage({
         action: 'updateApiKeys'
@@ -1508,46 +1551,46 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
 async function extractJobInfo() {
   console.log('🚀🚀🚀 EXTRACT JOB INFO FUNCTION CALLED 🚀🚀🚀');
   console.log('🚀 extractJobInfo function called');
-  
+
   if (!isJobSite) {
     console.log('❌ Not a job site, returning');
     return;
   }
   console.log('✅ Job site detected');
-  
+
   // Check if AI Analysis is enabled
   if (!aiAnalysisEnabled) {
     console.log('⏸️ Job extraction skipped - AI Analysis is disabled');
     return;
   }
   console.log('✅ AI Analysis is enabled');
-  
+
   // Check if we're in a delay period
   if (urlOpeningTracker.isDelaying) {
     console.log(`⏸️ Job extraction blocked - waiting for URL delay to complete`);
     return;
   }
   console.log('✅ No URL delay active');
-  
+
   // Get an available API key (not rate limited)
   let currentApiKey = null;
   let currentKeyId = null;
-  
+
   console.log('🔍 About to call getAvailableApiKey...');
   const availableKey = await getAvailableApiKey();
   console.log('🔍 getAvailableApiKey returned:', availableKey);
-  
+
   if (availableKey) {
     currentApiKey = availableKey.key;
     currentKeyId = availableKey.id;
     console.log(`✅ Using available key: ${availableKey.masked}`);
   } else {
     console.log('❌ getAvailableApiKey returned null, trying simple fallback...');
-    
+
     // Simple fallback: just use the first valid key
     const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
     const firstValidKey = keys.find(key => key.status === 'valid');
-    
+
     if (firstValidKey) {
       currentApiKey = firstValidKey.key;
       currentKeyId = firstValidKey.id;
@@ -1567,20 +1610,32 @@ async function extractJobInfo() {
     }
   }
   console.log('✅ API key selection completed');
-  
-  // Prevent multiple simultaneous requests
+
+  // Allow multiple requests but with a small delay to prevent overwhelming
   if (isRequestInProgress) {
     blockedRequests++;
-    console.log(`⏸️ Request already in progress, skipping... (${blockedRequests} blocked)`);
+    console.log(`⏸️ Request in progress, queuing... (${blockedRequests} queued)`);
+    
+    // Limit queued requests to prevent infinite queuing
+    if (blockedRequests > 5) {
+      console.log(`🚫 Too many queued requests (${blockedRequests}), skipping this request`);
+      return;
+    }
+    
+    // Queue the request with a small delay instead of blocking completely
+    setTimeout(() => {
+      console.log(`🔄 Retrying queued request...`);
+      extractJobInfo();
+    }, 2000); // 2 second delay for queued requests
     return;
   }
   console.log('✅ No request in progress, proceeding');
-  
+
   // Set request lock
   isRequestInProgress = true;
   console.log(`🔒 Starting job extraction attempt ${loadAttempts}/${maxLoadAttempts} at ${new Date().toLocaleTimeString()}`);
   console.log(`🔒 Request lock set, isRequestInProgress: ${isRequestInProgress}`);
-  
+
   // Safety check: prevent infinite loops
   if (loadAttempts > maxLoadAttempts) {
     console.error(`❌ Maximum attempts (${maxLoadAttempts}) reached, stopping extraction`);
@@ -1588,94 +1643,102 @@ async function extractJobInfo() {
     loadFailed = true;
     lastLoadError = 'Maximum attempts reached';
     updateBadge();
+    
+    // Reset after a longer delay to allow retry on page refresh
+    setTimeout(() => {
+      loadAttempts = 0;
+      loadFailed = false;
+      lastLoadError = null;
+      console.log(`🔄 Reset extraction attempts after max attempts reached`);
+    }, 30000); // 30 second reset
     return;
   }
-  
-      // Check RPM limit for Gemini only (OpenAI has no RPM limits)
-    if (aiProvider === 'gemini') {
-      const keys = geminiKeys;
-      const key = keys.find(k => k.id === currentKeyId);
-      if (key) {
-        const now = Date.now();
-        const oneMinuteAgo = now - 60000; // 60 seconds
-        
-        // Initialize requestsInLastMinute if not exists
-        if (!key.usage.requestsInLastMinute) {
-          key.usage.requestsInLastMinute = [];
-        }
-        
-        // Remove requests older than 1 minute
-        key.usage.requestsInLastMinute = key.usage.requestsInLastMinute.filter(timestamp => timestamp > oneMinuteAgo);
-        
-        // Check if we've hit the RPM limit
-        if (key.usage.requestsInLastMinute.length >= 10) {
-          console.log('🚫 Gemini RPM limit reached (10 requests/minute), waiting...');
-          isRequestInProgress = false;
-          updateBadge('RPM limit reached', '#ff6b6b');
-          return;
-        }
-        
-        // Add current request timestamp
-        key.usage.requestsInLastMinute.push(now);
+
+  // Check RPM limit for Gemini only (OpenAI has no RPM limits)
+  if (aiProvider === 'gemini') {
+    const keys = geminiKeys;
+    const key = keys.find(k => k.id === currentKeyId);
+    if (key) {
+      const now = Date.now();
+      const oneMinuteAgo = now - 60000; // 60 seconds
+
+      // Initialize requestsInLastMinute if not exists
+      if (!key.usage.requestsInLastMinute) {
+        key.usage.requestsInLastMinute = [];
       }
+
+      // Remove requests older than 1 minute
+      key.usage.requestsInLastMinute = key.usage.requestsInLastMinute.filter(timestamp => timestamp > oneMinuteAgo);
+
+      // Check if we've hit the RPM limit
+      if (key.usage.requestsInLastMinute.length >= 10) {
+        console.log('🚫 Gemini RPM limit reached (10 requests/minute), waiting...');
+        isRequestInProgress = false;
+        updateBadge('RPM limit reached', '#ff6b6b');
+        return;
+      }
+
+      // Add current request timestamp
+      key.usage.requestsInLastMinute.push(now);
     }
+  }
   console.log('✅ RPM check completed');
-  
+
   loadAttempts++;
   console.log(`📊 Load attempts: ${loadAttempts}/${maxLoadAttempts}`);
 
-  
-  try {  
+
+  try {
     console.log('🔍 Collecting job elements...');
     const jobElements = collectJobElements();
     let pageContent = '';
-     pageContent = jobElements;
-     console.log(`📄 Collected page content: ${pageContent.length} characters`);
-     
-     // Validate that we have content
-     if (!pageContent || pageContent.trim().length === 0) {
-       console.error('❌ No page content found');
-       console.error('❌ Page content details:', { 
-         hasContent: !!pageContent, 
-         contentLength: pageContent?.length || 0,
-         trimmedLength: pageContent?.trim().length || 0
-       });
-       lastLoadError = 'No page content available';
-       updateBadge();
-       return;
-     }
-     
-     console.log('✅ Page content validation passed');
-     
+    pageContent = jobElements;
+    console.log(`📄 Collected page content: ${pageContent.length} characters`);
+
+    // Validate that we have content
+    if (!pageContent || pageContent.trim().length === 0) {
+      console.error('❌ No page content found');
+      console.error('❌ Page content details:', {
+        hasContent: !!pageContent,
+        contentLength: pageContent?.length || 0,
+        trimmedLength: pageContent?.trim().length || 0
+      });
+      lastLoadError = 'No page content available';
+      updateBadge();
+      return;
+    }
+
+    console.log('✅ Page content validation passed');
+
     //  Truncate content to prevent API errors (keep first 50000 characters for GPT-4 Turbo)
-     if (pageContent.length > 50000) {
-       pageContent = pageContent.substring(0, 50000) + '... [Content truncated]';
-     }
-     console.log('Page Content:', pageContent);
-    
+    if (pageContent.length > 50000) {
+      pageContent = pageContent.substring(0, 50000) + '... [Content truncated]';
+    }
+    console.log('Page Content:', pageContent);
+
     // Add timeout to prevent hanging
     const controller = new AbortController();
-     const timeoutId = setTimeout(() => {
-       controller.abort();
-       console.log('⏰ Request timeout - aborting');
-     }, 15000); // 15 second timeout
-    
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.log('⏰ Request timeout - aborting');
+    }, 15000); // 15 second timeout
+
     console.log(`🚀 Making API call to ${aiProvider}...`);
     console.log(`🔑 Using API key: ${currentApiKey ? currentApiKey.substring(0, 20) + '...' : 'NULL'}`);
     let response;
     if (aiProvider === 'openai') {
       console.log('📡 Calling OpenAI API...');
       response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{
-          role: 'system',
-          content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{
+            role: 'system',
+            content: `Extract job information from the following HTML content. Return ONLY a JSON object with these exact fields:
 
 "position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
 - PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
@@ -1789,25 +1852,25 @@ The HTML structure will help you identify the main job title and company name mo
 Look for work arrangement patterns, location requirements, flexibility mentions, and company policies. Pay special attention to physical presence requirements: commute, relocate, in-office meetings, travel requirements, and whether the job allows work from anywhere or requires specific location presence.
 
 CRITICAL: Return ONLY a valid JSON object. Do not include any other text, explanations, or markdown formatting. The response must start with { and end with }. If any field is missing, use empty string "".`
-        }, {
-          role: 'user',
-          content: `Job Posting Content:
+          }, {
+            role: 'user',
+            content: `Job Posting Content:
 ${pageContent}
 
 User Work Experience:
 ${userWorkExperience || 'No work experience provided'}
 
 User Location: ${userLocation || 'Not specified'}`
-        }],
-        max_tokens: 1000,
-        temperature: 0.1
-      }),
-      signal: controller.signal
-    });
+          }],
+          max_tokens: 1000,
+          temperature: 0.1
+        }),
+        signal: controller.signal
+      });
     } else {
       // Gemini API call
       console.log('📡 Calling Gemini API...');
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${currentApiKey}`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${currentApiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1941,22 +2004,22 @@ User Location: ${userLocation || 'Not specified'}`
         signal: controller.signal
       });
     }
-    
+
     clearTimeout(timeoutId); // Clear timeout if successful
-    
+
     console.log(`📥 API Response received: ${response.status} ${response.statusText}`);
-    
+
     if (response.ok) {
       console.log('✅ API call successful, parsing response...');
       const data = await response.json();
       let content;
-      
+
       // Update usage tracking
-      const tokensUsed = aiProvider === 'openai' ? 
-        (data.usage?.total_tokens || 0) : 
+      const tokensUsed = aiProvider === 'openai' ?
+        (data.usage?.total_tokens || 0) :
         (data.usageMetadata?.totalTokenCount || 0);
       await updateKeyUsage(currentKeyId, tokensUsed);
-      
+
       if (aiProvider === 'openai') {
         content = data.choices[0].message.content;
       } else {
@@ -1964,13 +2027,13 @@ User Location: ${userLocation || 'Not specified'}`
         content = data.candidates[0].content.parts[0].text;
       }
 
-      
+
       try {
         // Clean the content to handle markdown-wrapped JSON
         let cleanedContent = content.trim();
-        
+
         console.log('🔍 Original AI response:', content);
-        
+
         // Remove markdown code block wrappers if present
         if (cleanedContent.startsWith('```json')) {
           cleanedContent = cleanedContent.replace(/^```json\s*/, '');
@@ -1981,18 +2044,18 @@ User Location: ${userLocation || 'Not specified'}`
         if (cleanedContent.endsWith('```')) {
           cleanedContent = cleanedContent.replace(/\s*```$/, '');
         }
-        
+
         // Check if content looks like JSON (starts with { or [)
         const trimmedContent = cleanedContent.trim();
         if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
           console.log('❌ Content does not start with JSON structure');
           console.log('❌ First 50 characters:', trimmedContent.substring(0, 50));
           lastLoadError = 'AI returned non-JSON response: ' + trimmedContent.substring(0, 100);
-              updateBadge();
+          updateBadge();
           return;
         }
         cleanedContent = trimmedContent;
-        
+
         // Remove markdown code block wrappers if present
         if (cleanedContent.startsWith('```json')) {
           cleanedContent = cleanedContent.replace(/^```json\s*/, '');
@@ -2003,7 +2066,7 @@ User Location: ${userLocation || 'Not specified'}`
         if (cleanedContent.endsWith('```')) {
           cleanedContent = cleanedContent.replace(/\s*```$/, '');
         }
-        
+
         // Remove any leading/trailing whitespace and quotes
         cleanedContent = cleanedContent.trim();
         if (cleanedContent.startsWith("'") && cleanedContent.endsWith("'")) {
@@ -2012,15 +2075,15 @@ User Location: ${userLocation || 'Not specified'}`
         if (cleanedContent.startsWith('"') && cleanedContent.endsWith('"')) {
           cleanedContent = cleanedContent.slice(1, -1);
         }
-                
+
         const jobData = JSON.parse(cleanedContent);
-        
+
         if (jobData && jobData.position) {
           // Validate that company and position are not the same
           const position = jobData.position.trim();
           const company = (jobData.company || '').trim();
           const jobType = (jobData.jobType || '').trim();
-          
+
           jobInfo = {
             position: position,
             company: company,
@@ -2040,74 +2103,95 @@ User Location: ${userLocation || 'Not specified'}`
         } else {
           // No valid job data found
           lastLoadError = 'Incomplete job data from AI';
-            updateBadge();
+          updateBadge();
         }
       } catch (e) {
         // JSON parse failed
         console.log('❌ JSON Parse Error:', e.message);
         console.log('📄 Original content:', content);
         lastLoadError = 'JSON Parse Error: ' + e.message;
-          updateBadge();
+        updateBadge();
       }
     } else {
       // API request failed
       console.log(`❌ API request failed: ${response.status} ${response.statusText}`);
       const errorText = await response.text();
       console.log('Error response:', errorText);
-      
-      // Handle rate limiting (only for Gemini)
+
+      // Handle rate limiting (only for Gemini) - More conservative approach
       if (response.status === 429 && aiProvider === 'gemini') {
-        console.log('Gemini rate limit hit, marking key as limited and trying another key...');
+        console.log('Gemini rate limit hit, implementing smart retry strategy...');
         const key = geminiKeys.find(k => k.id === currentKeyId);
         if (key) {
           key.usage = key.usage || {};
-          key.usage.isRateLimited = true;
-          key.usage.rateLimitReset = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
           
-          // Save updated key status
-          chrome.storage.sync.set({
-            geminiKeys: geminiKeys
-          });
+          // Don't immediately mark as rate limited - implement retry with backoff
+          if (!key.usage.rateLimitAttempts) {
+            key.usage.rateLimitAttempts = 0;
+          }
+          key.usage.rateLimitAttempts++;
           
+          // Only mark as rate limited after 3 consecutive 429 errors
+          if (key.usage.rateLimitAttempts >= 3) {
+            key.usage.isRateLimited = true;
+            key.usage.rateLimitReset = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes instead of 1 hour
+            console.log(`🚫 Key ${key.masked} marked as rate limited after ${key.usage.rateLimitAttempts} attempts`);
+            
+            // Save updated key status
+            chrome.storage.sync.set({
+              geminiKeys: geminiKeys
+            });
+          } else {
+            console.log(`⚠️ Key ${key.masked} hit rate limit (attempt ${key.usage.rateLimitAttempts}/3), will retry with backoff`);
+          }
+
           // Clear the cached key so we can select a different one
+          clearPageKeyCache();
+
+          // Force key rotation by clearing the cache
           clearPageKeyCache();
           
           // Try with another available key
           const nextKey = await getAvailableApiKey();
           if (nextKey && nextKey.id !== currentKeyId) {
             console.log(`Retrying with next available Gemini key: ${nextKey.masked}`);
+            // Add a small delay before retry
+            await new Promise(resolve => setTimeout(resolve, 2000));
             // Recursive call with new key
             return await extractJobInfo();
           } else {
-            console.log('No other available keys found, stopping retry');
+            console.log('No other available keys found, will retry current key with backoff');
+            // If no other keys, wait and retry with current key
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return await extractJobInfo();
           }
         }
       }
-      
+
       lastLoadError = `API Error: ${response.status} - ${errorText}`;
-        updateBadge();
+      updateBadge();
     }
   } catch (error) {
-      // Handle network or other errors
-      if (error.name === 'AbortError') {
-        lastLoadError = 'Request Timeout (15s)';
-      } else if (error.message && error.message.includes('Unauthorized')) {
-        lastLoadError = 'Authentication Error - Check API Key';
-        loadFailed = true; // Stop retrying on auth errors
-      } else if (error.message && error.message.includes('401')) {
-        lastLoadError = 'API Authentication Failed';
-        loadFailed = true; // Stop retrying on auth errors
-      } else {
-        lastLoadError = error.message || 'Network Error';
-      }
-      updateBadge();
+    // Handle network or other errors
+    if (error.name === 'AbortError') {
+      lastLoadError = 'Request Timeout (15s)';
+    } else if (error.message && error.message.includes('Unauthorized')) {
+      lastLoadError = 'Authentication Error - Check API Key';
+      loadFailed = true; // Stop retrying on auth errors
+    } else if (error.message && error.message.includes('401')) {
+      lastLoadError = 'API Authentication Failed';
+      loadFailed = true; // Stop retrying on auth errors
+    } else {
+      lastLoadError = error.message || 'Network Error';
+    }
+    updateBadge();
   } finally {
     // Always unlock the request when done (success or failure)
     isRequestInProgress = false;
     console.log('🔓 Request lock released');
-    
+
     // Clear timeout if it was set
-    if (timeoutId) {
+    if (typeof timeoutId !== 'undefined' && timeoutId) {
       clearTimeout(timeoutId);
     }
   }
@@ -2118,19 +2202,19 @@ function loadBadgePosition(badge) {
   chrome.storage.sync.get(['badgePosition'], (result) => {
     if (result.badgePosition) {
       const position = result.badgePosition;
-      
+
       // Set the position
       badge.style.left = position.left;
       badge.style.top = position.top;
-      
+
       // Ensure badge is within viewport bounds
       const rect = badge.getBoundingClientRect();
       const maxLeft = window.innerWidth - badge.offsetWidth;
       const maxTop = window.innerHeight - badge.offsetHeight;
-      
+
       const currentLeft = parseInt(position.left);
       const currentTop = parseInt(position.top);
-      
+
       if (currentLeft > maxLeft || currentTop > maxTop) {
         // Reset to default position if out of bounds
         badge.style.left = '20px';
@@ -2158,95 +2242,95 @@ function initializeHighlighter() {
   if (keywords.length === 0) return;
 
   // Load Job Radar state from storage
-  chrome.storage.sync.get(['jobRadarEnabled'], function(result) {
+  chrome.storage.sync.get(['jobRadarEnabled'], function (result) {
     jobRadarEnabled = result.jobRadarEnabled !== false; // Default to true if not set
 
-  // Reset load status for new page
-  resetLoadStatus();
+    // Reset load status for new page
+    resetLoadStatus();
 
-  // Clear previous observer
-  if (observer) {
-    observer.disconnect();
-  }
+    // Clear previous observer
+    if (observer) {
+      observer.disconnect();
+    }
 
-  // Check if this is a job site
-  isJobSite = detectJobSite();
-  
-  // Initialize URL opening tracker for job sites
-  if (isJobSite) {
-    initializeUrlOpeningTracker();
-  }
-  
-  // If this is a job site, keep highlighting active regardless of Job Radar toggle
-  if (isJobSite) {
-    // Only show badge and run job extraction when Job Radar is enabled
-    if (jobRadarEnabled) {
+    // Check if this is a job site
+    isJobSite = detectJobSite();
+
+    // Initialize URL opening tracker for job sites
+    if (isJobSite) {
+      initializeUrlOpeningTracker();
+    }
+
+    // If this is a job site, keep highlighting active regardless of Job Radar toggle
+    if (isJobSite) {
+      // Only show badge and run job extraction when Job Radar is enabled
+      if (jobRadarEnabled) {
         // Check if we have any valid API keys for the current provider
         const keys = aiProvider === 'openai' ? openaiKeys : geminiKeys;
         const hasValidApiKey = keys.some(key => key.status === 'valid');
-        
+
         // Extract job information if we have a valid API key
         if (hasValidApiKey) {
-        startContinuousJobExtraction();
+          startContinuousJobExtraction();
+        }
+
+        // Show the badge
+        updateBadge();
+      } else {
+        // Hide/remove the badge if it exists when disabled
+        const existingBadge = document.getElementById('keyword-highlighter-badge');
+        if (existingBadge) {
+          existingBadge.remove();
+        }
       }
-      
-      // Show the badge
-      updateBadge();
+
+      // Initial highlight for existing content (runs regardless of toggle)
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(highlightKeywords, 1000);
+        });
+      } else {
+        setTimeout(highlightKeywords, 1000);
+      }
+
+      // Start continuous keyword monitoring regardless of toggle
+      startContinuousKeywordMonitoring();
     } else {
-      // Hide/remove the badge if it exists when disabled
+      // Non-job sites: hide/remove the badge if it exists and stop further processing
       const existingBadge = document.getElementById('keyword-highlighter-badge');
       if (existingBadge) {
         existingBadge.remove();
       }
+      return;
     }
 
-    // Initial highlight for existing content (runs regardless of toggle)
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(highlightKeywords, 1000);
+    // Test keyword detection
+    setTimeout(testKeywordDetection, 2000);
+
+    // Set up MutationObserver for dynamic content
+    observer = new MutationObserver((mutations) => {
+      let shouldHighlight = false;
+
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeType === 1 && !containsHighlights(node) && !processedElements.has(node) && !isInsideBadge(node)) {
+              shouldHighlight = true;
+            }
+          });
+        }
       });
-    } else {
-      setTimeout(highlightKeywords, 1000);
-    }
-    
-    // Start continuous keyword monitoring regardless of toggle
-    startContinuousKeywordMonitoring();
-  } else {
-    // Non-job sites: hide/remove the badge if it exists and stop further processing
-    const existingBadge = document.getElementById('keyword-highlighter-badge');
-    if (existingBadge) {
-      existingBadge.remove();
-    }
-    return;
-  }
-  
-  // Test keyword detection
-  setTimeout(testKeywordDetection, 2000);
 
-  // Set up MutationObserver for dynamic content
-  observer = new MutationObserver((mutations) => {
-    let shouldHighlight = false;
-
-    mutations.forEach((mutation) => {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1 && !containsHighlights(node) && !processedElements.has(node) && !isInsideBadge(node)) {
-            shouldHighlight = true;
-          }
-        });
+      if (shouldHighlight && !isProcessing) {
+        clearTimeout(window.highlightTimeout);
+        window.highlightTimeout = setTimeout(highlightKeywords, 1000);
       }
     });
 
-    if (shouldHighlight && !isProcessing) {
-      clearTimeout(window.highlightTimeout);
-      window.highlightTimeout = setTimeout(highlightKeywords, 1000);
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
   }); // Close the chrome.storage.sync.get callback
 }
 
@@ -2255,17 +2339,22 @@ let currentUrl = window.location.href;
 function checkUrlChange() {
   const newUrl = window.location.href;
   if (newUrl !== currentUrl) {
+    console.log(`🔄 URL changed from ${currentUrl} to ${newUrl}`);
     currentUrl = newUrl;
+
+    // Reset extraction state for new page
+    resetLoadStatus();
     
     // Small delay to ensure page has loaded
     setTimeout(() => {
+      console.log(`🔄 Initializing highlighter for new URL: ${newUrl}`);
       initializeHighlighter();
-    }, 1000);
+    }, 500); // Reduced delay from 1000ms to 500ms
   }
 }
 
-// Set up URL change monitoring
-setInterval(checkUrlChange, 2000);
+// Set up URL change monitoring with more frequent checks
+setInterval(checkUrlChange, 1000); // Increased frequency from 2000ms to 1000ms
 
 // Check if element is inside the badge area
 function isInsideBadge(element) {
@@ -2284,20 +2373,20 @@ function containsHighlights(element) {
 function countKeywordMatches() {
   const highlights = document.querySelectorAll('.keyword-highlight');
   let totalMatches = 0;
-  
+
   highlights.forEach(highlight => {
     if (!isInsideBadge(highlight)) {
       totalMatches++;
     }
   });
-  
+
   return totalMatches;
 }
 
 // Test keyword detection manually
 function testKeywordDetection() {
-  
-  
+
+
   keywords.forEach(keywordObj => {
     const regex = new RegExp(`\\b${escapeRegExp(keywordObj.text)}\\b`, 'gi');
     const matches = document.body.innerText.match(regex);
@@ -2324,21 +2413,21 @@ function escapeRegExp(string) {
 
 // Copy job information to clipboard in tab-separated format
 function copyJobToClipboard() {
-  
+
   if (!jobInfo) {
     showCopyError('No job info available');
     return;
   }
-  
+
   try {
     // Get current job URL
     const jobUrl = window.location.href;
-    
+
     // Clean the data to prevent issues with tabs/newlines
     const cleanCompany = jobInfo.company.replace(/[\t\n\r]/g, ' ').trim();
     const cleanPosition = jobInfo.position.replace(/[\t\n\r]/g, ' ').trim();
     const cleanIndustry = jobInfo.industry.replace(/[\t\n\r]/g, ' ').trim();
-    
+
     // Load copy preferences (defaults: includeIndustry=false, includeCompanySize=false, includeFoundedDate=false, includeTechStack=false, includeMatchRate=false)
     chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], (prefs) => {
       const includeIndustry = prefs.copyIncludeIndustry === true;
@@ -2369,8 +2458,8 @@ function copyJobToClipboard() {
       }
 
       const copyText = fields.join('\t');
-    
-    
+
+
       // Try modern clipboard API first
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(copyText).then(() => {
@@ -2401,10 +2490,10 @@ function useFallbackCopy(copyText) {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
+
     const success = document.execCommand('copy');
     document.body.removeChild(textArea);
-    
+
     if (success) {
       showCopySuccess();
     } else {
@@ -2424,7 +2513,7 @@ function showCopySuccess() {
     const originalText = button.innerHTML;
     button.innerHTML = '✅';
     button.style.background = 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)';
-    
+
     // Reset button after 2 seconds
     setTimeout(() => {
       button.innerHTML = originalText;
@@ -2440,7 +2529,7 @@ function showCopyError(message) {
     const originalText = button.innerHTML;
     button.innerHTML = '❌';
     button.style.background = 'linear-gradient(135deg, #f56565 0%, #e53e3e 100%)';
-    
+
     // Reset button after 2 seconds
     setTimeout(() => {
       button.innerHTML = originalText;
@@ -2467,48 +2556,48 @@ async function generateCoverLetter() {
     console.log('⏸️ Cover letter generation skipped - AI Analysis is disabled');
     return;
   }
-  
+
   const promptTextarea = document.querySelector('.cover-letter-prompt');
   const generateBtn = document.querySelector('.generate-cover-letter-btn');
   const coverLetterDisplay = document.querySelector('.generated-cover-letter');
   const coverLetterContent = document.querySelector('.cover-letter-content');
-  
+
   if (!promptTextarea || !generateBtn || !coverLetterDisplay || !coverLetterContent) {
     console.error('Cover letter elements not found');
     return;
   }
-  
+
   const prompt = promptTextarea.value.trim();
   if (!prompt) {
     alert('Please enter a cover letter prompt first.');
     return;
   }
-  
+
   // Get an available API key using rotation logic
   const availableKey = await getAvailableApiKey();
-  
+
   if (!availableKey) {
     alert(`Please configure your ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key in the AI Settings tab first.`);
     return;
   }
-  
+
   const currentApiKey = availableKey.key;
   console.log(`🔑 Cover letter using key: ${availableKey.masked}`);
-  
+
   if (!userWorkExperience) {
     alert('Please add your work experience in the Profile tab first.');
     return;
   }
-  
+
   // Show loading state
   generateBtn.textContent = '⏳';
   generateBtn.disabled = true;
   generateBtn.title = 'Generating...';
-  
+
   try {
     // Get the full page content
     const pageContent = collectJobElements();
-    
+
     // Prepare the AI request
     const messages = [
       {
@@ -2530,22 +2619,22 @@ ${prompt}
 Return only the cover letter text without any formatting or additional text.`
       }
     ];
-    
+
     let response;
     if (aiProvider === 'openai') {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: messages,
-        max_tokens: 800,
-        temperature: 0.7
-      })
-    });
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: messages,
+          max_tokens: 800,
+          temperature: 0.7
+        })
+      });
     } else {
       // Gemini API call for cover letter generation
       response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${currentApiKey}`, {
@@ -2566,28 +2655,28 @@ Return only the cover letter text without any formatting or additional text.`
         })
       });
     }
-    
+
     if (response.ok) {
       const data = await response.json();
       let coverLetter;
-      
+
       // Update usage tracking
-      const tokensUsed = aiProvider === 'openai' ? 
-        (data.usage?.total_tokens || 0) : 
+      const tokensUsed = aiProvider === 'openai' ?
+        (data.usage?.total_tokens || 0) :
         (data.usageMetadata?.totalTokenCount || 0);
       await updateKeyUsage(currentKeyId, tokensUsed);
-      
+
       if (aiProvider === 'openai') {
         coverLetter = data.choices[0].message.content.trim();
       } else {
         // Gemini response format
         coverLetter = data.candidates[0].content.parts[0].text.trim();
       }
-      
+
       // Display the generated cover letter
       coverLetterContent.textContent = coverLetter;
       coverLetterDisplay.style.display = 'block';
-      
+
       // Show success feedback
       generateBtn.textContent = '✅';
       generateBtn.title = 'Generated Successfully!';
@@ -2596,16 +2685,16 @@ Return only the cover letter text without any formatting or additional text.`
         generateBtn.title = 'Generate Cover Letter';
         generateBtn.disabled = false;
       }, 2000);
-      
+
     } else {
       const errorText = await response.text();
       throw new Error(`API Error: ${response.status} - ${errorText}`);
     }
-    
+
   } catch (error) {
     console.error('Cover letter generation failed:', error);
     alert(`Failed to generate cover letter: ${error.message}`);
-    
+
     // Reset button state
     generateBtn.textContent = '📤';
     generateBtn.title = 'Generate Cover Letter';
@@ -2615,14 +2704,14 @@ Return only the cover letter text without any formatting or additional text.`
 
 // Save cover letter prompt to storage
 function saveCoverLetterPrompt(prompt) {
-  chrome.storage.sync.set({ coverLetterPrompt: prompt }, function() {
+  chrome.storage.sync.set({ coverLetterPrompt: prompt }, function () {
     console.log('Cover letter prompt saved:', prompt);
   });
 }
 
 // Load cover letter prompt from storage
 function loadCoverLetterPrompt() {
-  chrome.storage.sync.get(['coverLetterPrompt'], function(result) {
+  chrome.storage.sync.get(['coverLetterPrompt'], function (result) {
     if (result.coverLetterPrompt) {
       const promptTextarea = document.querySelector('.cover-letter-prompt');
       if (promptTextarea) {
@@ -2641,10 +2730,10 @@ function loadCoverLetterPrompt() {
 function updateCoverLetterSectionVisibility() {
   const badge = document.getElementById('keyword-highlighter-badge');
   if (!badge) return;
-  
+
   const existingCoverLetterSection = badge.querySelector('.cover-letter-section');
   if (!existingCoverLetterSection) return;
-  
+
   // Show/hide based on toggle state
   if (coverLetterEnabled) {
     existingCoverLetterSection.style.display = 'block';
@@ -2657,25 +2746,25 @@ function updateCoverLetterSectionVisibility() {
 function updateBadgeForProfile() {
   const badge = document.getElementById('keyword-highlighter-badge');
   if (!badge) return;
-  
+
   // Check if profile is complete
   const hasProfile = userWorkExperience && userWorkExperience.trim().length > 0;
-  
+
   // Find existing cover letter section
   let existingCoverLetterSection = badge.querySelector('.cover-letter-section');
-  
+
   // Prevent blinking by checking if we're already in the correct state
   if (hasProfile && existingCoverLetterSection) {
     // Profile is complete and cover letter section already exists - update visibility based on toggle
     updateCoverLetterSectionVisibility();
     return;
   }
-  
+
   if (!hasProfile && !existingCoverLetterSection) {
     // Profile is incomplete and no cover letter section exists - do nothing
     return;
   }
-  
+
   if (hasProfile && !existingCoverLetterSection) {
     // Profile is complete but no cover letter section exists - add it
     const jobInfoSection = badge.querySelector('.job-info');
@@ -2706,10 +2795,10 @@ function updateBadgeForProfile() {
           </div>
         </div>
       `;
-      
+
       // Insert after job info section
       jobInfoSection.insertAdjacentHTML('afterend', coverLetterHTML);
-      
+
       // Add event listeners to new elements
       setTimeout(() => {
         const newCoverLetterSection = badge.querySelector('.cover-letter-section');
@@ -2719,13 +2808,13 @@ function updateBadgeForProfile() {
           if (generateBtn) {
             generateBtn.addEventListener('click', generateCoverLetter);
           }
-          
+
           // Add copy button event listener
           const copyBtn = newCoverLetterSection.querySelector('.copy-cover-letter-btn');
           if (copyBtn) {
             copyBtn.addEventListener('click', copyCoverLetter);
           }
-          
+
           // Add prompt saving event listener
           const promptTextarea = newCoverLetterSection.querySelector('.cover-letter-prompt');
           if (promptTextarea) {
@@ -2733,7 +2822,7 @@ function updateBadgeForProfile() {
               saveCoverLetterPrompt(e.target.value);
               updateGenerateButtonState(e.target.value);
             });
-            
+
             // Load saved prompt and update button state
             loadCoverLetterPrompt();
           }
@@ -2750,9 +2839,9 @@ function updateBadgeForProfile() {
 function updateGenerateButtonState(promptText) {
   const generateBtn = document.querySelector('.generate-cover-letter-btn');
   if (!generateBtn) return;
-  
+
   const hasPrompt = promptText && promptText.trim().length > 0;
-  
+
   if (hasPrompt) {
     generateBtn.disabled = false;
     generateBtn.title = 'Generate Cover Letter';
@@ -2771,7 +2860,7 @@ function copyCoverLetter() {
     alert('No cover letter available to copy.');
     return;
   }
-  
+
   navigator.clipboard.writeText(coverLetterContent.textContent.trim()).then(() => {
     // Show success feedback
     const copyBtn = document.querySelector('.copy-cover-letter-btn');
@@ -2814,23 +2903,23 @@ function createBadge() {
   if (!jobRadarEnabled) {
     return null; // Don't create badge if Job Radar is disabled
   }
-  
+
   let badge = document.getElementById('keyword-highlighter-badge');
   if (badge) {
     return badge; // Badge already exists
   }
 
-    badge = document.createElement('div');
-    badge.id = 'keyword-highlighter-badge';
-    document.body.appendChild(badge);
+  badge = document.createElement('div');
+  badge.id = 'keyword-highlighter-badge';
+  document.body.appendChild(badge);
 
-    // Add drag handle with beautiful modern design
-    const dragHandle = document.createElement('div');
-    dragHandle.className = 'badge-drag-handle';
-    dragHandle.innerHTML = `
+  // Add drag handle with beautiful modern design
+  const dragHandle = document.createElement('div');
+  dragHandle.className = 'badge-drag-handle';
+  dragHandle.innerHTML = `
       <div class="drag-icon">⋮⋮</div>
     `;
-    dragHandle.style.cssText = `
+  dragHandle.style.cssText = `
       cursor: move;
       padding: 6px 10px;
       text-align: center;
@@ -2849,11 +2938,11 @@ function createBadge() {
       justify-content: center;
     `;
 
-    // Add close button to drag handle
-    const closeButton = document.createElement('button');
-    closeButton.innerHTML = '✕';
-    closeButton.title = 'Close Job Radar';
-    closeButton.style.cssText = `
+  // Add close button to drag handle
+  const closeButton = document.createElement('button');
+  closeButton.innerHTML = '✕';
+  closeButton.title = 'Close Job Radar';
+  closeButton.style.cssText = `
       position: absolute;
       top: 2px;
       right: 2px;
@@ -2872,59 +2961,59 @@ function createBadge() {
       transition: all 0.3s ease;
       z-index: 10;
     `;
-    
-    closeButton.addEventListener('mouseenter', () => {
-      closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
-      closeButton.style.transform = 'scale(1.1)';
-    });
-    
-    closeButton.addEventListener('mouseleave', () => {
-      closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
-      closeButton.style.transform = 'scale(1)';
-    });
-    
-    closeButton.addEventListener('click', () => {
-      // Hide the badge
-      if (badge) {
-        badge.style.display = 'none';
-      }
-      
-      // Stop job extraction but keep highlighting active
-      if (window.extractionInterval) {
-        clearInterval(window.extractionInterval);
-        window.extractionInterval = null;
-      }
-      
-      // Reset job info to clear the display
-      jobInfo = null;
-      
-      // Update badge to show it's closed
-      updateBadge();
-    });
-    
-    dragHandle.appendChild(closeButton);
 
-    badge.appendChild(dragHandle);
+  closeButton.addEventListener('mouseenter', () => {
+    closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+    closeButton.style.transform = 'scale(1.1)';
+  });
 
-    // Create content container
-    const contentContainer = document.createElement('div');
-    contentContainer.className = 'badge-content';
-    badge.appendChild(contentContainer);
+  closeButton.addEventListener('mouseleave', () => {
+    closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+    closeButton.style.transform = 'scale(1)';
+  });
 
-    // Add drag functionality
-    setupDragHandling(badge, dragHandle);
-    
-    // Load saved position
-    loadBadgePosition(badge);
-    
-    // Add copy button event listener
-    setTimeout(() => {
-      const copyBtn = badge.querySelector('.copy-job-btn');
-      if (copyBtn) {
-        copyBtn.addEventListener('click', copyJobToClipboard);
-      }
-    }, 100);
-  
+  closeButton.addEventListener('click', () => {
+    // Hide the badge
+    if (badge) {
+      badge.style.display = 'none';
+    }
+
+    // Stop job extraction but keep highlighting active
+    if (window.extractionInterval) {
+      clearInterval(window.extractionInterval);
+      window.extractionInterval = null;
+    }
+
+    // Reset job info to clear the display
+    jobInfo = null;
+
+    // Update badge to show it's closed
+    updateBadge();
+  });
+
+  dragHandle.appendChild(closeButton);
+
+  badge.appendChild(dragHandle);
+
+  // Create content container
+  const contentContainer = document.createElement('div');
+  contentContainer.className = 'badge-content';
+  badge.appendChild(contentContainer);
+
+  // Add drag functionality
+  setupDragHandling(badge, dragHandle);
+
+  // Load saved position
+  loadBadgePosition(badge);
+
+  // Add copy button event listener
+  setTimeout(() => {
+    const copyBtn = badge.querySelector('.copy-job-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', copyJobToClipboard);
+    }
+  }, 100);
+
   return badge;
 }
 
@@ -2961,7 +3050,7 @@ function updateBadge() {
       hasValidApiKey = selectedKey && selectedKey.status === 'valid';
     }
   }
-  
+
   console.log('updateBadge: API key check:', {
     aiProvider,
     hasValidApiKey,
@@ -2975,7 +3064,7 @@ function updateBadge() {
 
   // Check if badge is hidden (closed)
   const isBadgeHidden = badge && badge.style.display === 'none';
-  
+
   if (isBadgeHidden) {
     // Show closed state with reopen button
     content += `
@@ -3001,7 +3090,7 @@ function updateBadge() {
       </div>
     `;
   } else {
-  // Add job information if available
+    // Add job information if available
     if (jobInfo) {
       // Check location compatibility
       let locationAlert = '';
@@ -3020,7 +3109,7 @@ function updateBadge() {
           </div>
         `;
       }
-      
+
       // Match rate display
       let matchRateDisplay = '';
       if (jobInfo.matchRate > 0) {
@@ -3037,8 +3126,8 @@ function updateBadge() {
           </div>
         `;
       }
-      
-        content += `
+
+      content += `
           <div class="job-info">
           ${locationAlert}
           ${matchRateDisplay}
@@ -3098,7 +3187,7 @@ function updateBadge() {
               </div>
             </div>
         `;
-      } else {
+    } else {
       // Show enhanced loading UI when job info is not available, but only if AI analysis is enabled and we have valid API keys
       if (aiAnalysisEnabled && hasValidApiKey) {
         content += `
@@ -3140,22 +3229,8 @@ function updateBadge() {
             <button class="extract-job-btn" title="Extract Job Information">🔍</button>
           </div>
         `;
-      } else if (!aiAnalysisEnabled) {
-        // Show message when AI Analysis is disabled
-        content += `
-        <div class="job-info" style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 1px solid #d1d5db; color: #6b7280;">
-          <div class="job-info-title" style="color: #9ca3af;">⏸️ AI Analysis Disabled</div>
-        </div>
-        `;
-      } else if (!hasValidApiKey) {
-        // Show message when no valid API keys are available
-        content += `
-        <div class="job-info" style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fecaca; color: #dc2626;">
-          <div class="job-info-title" style="color: #dc2626;">🔑 API Key Required</div>
-        </div>
-        `;
       } // End of aiAnalysisEnabled && hasValidApiKey condition
-      } // End of inner else block (jobInfo)
+    } // End of inner else block (jobInfo)
   } // End of outer else block
 
   const sortedKeywords = Object.entries(matches)
@@ -3186,91 +3261,91 @@ function updateBadge() {
   const contentContainer = badge.querySelector('.badge-content');
   if (contentContainer) {
     contentContainer.innerHTML = content;
-    
-          // Add copy button event listener after content update
-      setTimeout(() => {
-        const copyBtn = badge.querySelector('.copy-job-btn');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', copyJobToClipboard);
-        }
-        
-        // Add extract job button event listener
-        const extractBtn = badge.querySelector('.extract-job-btn');
-        if (extractBtn) {
-          extractBtn.addEventListener('click', manualExtractJobInfo);
-        }
-        
-        // Add cover letter generation button event listener
-        const generateCoverLetterBtn = badge.querySelector('.generate-cover-letter-btn');
-        if (generateCoverLetterBtn) {
-          generateCoverLetterBtn.addEventListener('click', generateCoverLetter);
-        }
-        
-        // Add copy cover letter button event listener
-        const copyCoverLetterBtn = badge.querySelector('.copy-cover-letter-btn');
-        if (copyCoverLetterBtn) {
-          copyCoverLetterBtn.addEventListener('click', copyCoverLetter);
-        }
-        
-        // Add cover letter prompt saving event listener
-        const coverLetterPrompt = badge.querySelector('.cover-letter-prompt');
-        if (coverLetterPrompt) {
-          coverLetterPrompt.addEventListener('input', (e) => {
-            saveCoverLetterPrompt(e.target.value);
-            updateGenerateButtonState(e.target.value);
-          });
-          
-          // Load saved prompt and update button state
-          loadCoverLetterPrompt();
-        }
-        
-        // Check profile status and update badge accordingly
-        // updateBadgeForProfile();
-        
-        // Add reopen button event listener
-        const reopenBtn = badge.querySelector('.reopen-btn');
-        if (reopenBtn) {
-          reopenBtn.addEventListener('click', () => {
-            // Show the badge
-            if (badge) {
-              badge.style.display = 'block';
+
+    // Add copy button event listener after content update
+    setTimeout(() => {
+      const copyBtn = badge.querySelector('.copy-job-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', copyJobToClipboard);
+      }
+
+      // Add extract job button event listener
+      const extractBtn = badge.querySelector('.extract-job-btn');
+      if (extractBtn) {
+        extractBtn.addEventListener('click', manualExtractJobInfo);
+      }
+
+      // Add cover letter generation button event listener
+      const generateCoverLetterBtn = badge.querySelector('.generate-cover-letter-btn');
+      if (generateCoverLetterBtn) {
+        generateCoverLetterBtn.addEventListener('click', generateCoverLetter);
+      }
+
+      // Add copy cover letter button event listener
+      const copyCoverLetterBtn = badge.querySelector('.copy-cover-letter-btn');
+      if (copyCoverLetterBtn) {
+        copyCoverLetterBtn.addEventListener('click', copyCoverLetter);
+      }
+
+      // Add cover letter prompt saving event listener
+      const coverLetterPrompt = badge.querySelector('.cover-letter-prompt');
+      if (coverLetterPrompt) {
+        coverLetterPrompt.addEventListener('input', (e) => {
+          saveCoverLetterPrompt(e.target.value);
+          updateGenerateButtonState(e.target.value);
+        });
+
+        // Load saved prompt and update button state
+        loadCoverLetterPrompt();
+      }
+
+      // Check profile status and update badge accordingly
+      // updateBadgeForProfile();
+
+      // Add reopen button event listener
+      const reopenBtn = badge.querySelector('.reopen-btn');
+      if (reopenBtn) {
+        reopenBtn.addEventListener('click', () => {
+          // Show the badge
+          if (badge) {
+            badge.style.display = 'block';
+          }
+
+          // Restart job extraction
+          if (isJobSite) {
+            // Check if we have a valid API key for the current provider
+            let hasValidApiKey = false;
+            if (aiProvider === 'openai' && selectedOpenaiKey) {
+              const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
+              hasValidApiKey = key && key.status === 'valid';
+            } else if (aiProvider === 'gemini' && selectedGeminiKey) {
+              const key = geminiKeys.find(k => k.id === selectedGeminiKey);
+              hasValidApiKey = key && key.status === 'valid';
             }
-            
-            // Restart job extraction
-            if (isJobSite) {
-              // Check if we have a valid API key for the current provider
-              let hasValidApiKey = false;
-              if (aiProvider === 'openai' && selectedOpenaiKey) {
-                const key = openaiKeys.find(k => k.id === selectedOpenaiKey);
-                hasValidApiKey = key && key.status === 'valid';
-              } else if (aiProvider === 'gemini' && selectedGeminiKey) {
-                const key = geminiKeys.find(k => k.id === selectedGeminiKey);
-                hasValidApiKey = key && key.status === 'valid';
-              }
-              
-              if (hasValidApiKey) {
+
+            if (hasValidApiKey) {
               startContinuousJobExtraction();
-              }
             }
-            
-            // Update badge to show active state
-            updateBadge();
-          });
-        }
-        
-        // Add click handler to badge content for retry when failed
-        const badgeContent = badge.querySelector('.badge-content');
-        if (badgeContent && (loadFailed || loadAttempts >= 8)) {
-          badgeContent.style.cursor = 'pointer';
-          badgeContent.title = 'Click to retry extraction';
-          badgeContent.addEventListener('click', (e) => {
-            // Don't trigger if clicking on buttons
-            if (!e.target.closest('button')) {
-              manualExtractJobInfo();
-            }
-          });
-        }
-      }, 100);
+          }
+
+          // Update badge to show active state
+          updateBadge();
+        });
+      }
+
+      // Add click handler to badge content for retry when failed
+      const badgeContent = badge.querySelector('.badge-content');
+      if (badgeContent && (loadFailed || loadAttempts >= 8)) {
+        badgeContent.style.cursor = 'pointer';
+        badgeContent.title = 'Click to retry extraction';
+        badgeContent.addEventListener('click', (e) => {
+          // Don't trigger if clicking on buttons
+          if (!e.target.closest('button')) {
+            manualExtractJobInfo();
+          }
+        });
+      }
+    }, 100);
   }
 }
 
@@ -3286,7 +3361,7 @@ function setupDragHandling(badge, dragHandle) {
     dragOffset.y = e.clientY - rect.top;
 
     e.preventDefault();
-    
+
     document.addEventListener('mousemove', handleDrag);
     document.addEventListener('mouseup', stopDrag);
 
@@ -3299,21 +3374,21 @@ function setupDragHandling(badge, dragHandle) {
 
     const newLeft = e.clientX - dragOffset.x;
     const newTop = e.clientY - dragOffset.y;
-    
+
     // Keep badge within viewport bounds
     const maxLeft = window.innerWidth - badge.offsetWidth;
     const maxTop = window.innerHeight - badge.offsetHeight;
-    
+
     const boundedLeft = Math.max(0, Math.min(newLeft, maxLeft));
     const boundedTop = Math.max(0, Math.min(newTop, maxTop));
-    
+
     badge.style.left = boundedLeft + 'px';
     badge.style.top = boundedTop + 'px';
   }
 
   function stopDrag() {
     if (!isDragging) return;
-    
+
     isDragging = false;
     badge.style.transition = 'all 0.3s ease';
     badge.style.zIndex = '10000';
@@ -3322,24 +3397,24 @@ function setupDragHandling(badge, dragHandle) {
     document.removeEventListener('mouseup', stopDrag);
 
     // Save position
-      const position = {
-        left: badge.style.left,
-        top: badge.style.top
-      };
+    const position = {
+      left: badge.style.left,
+      top: badge.style.top
+    };
     chrome.storage.sync.set({ badgePosition: position });
   }
 }
 
 // Main highlighting function
 function highlightKeywords() {
-  
+
   if (isProcessing || keywords.length === 0) {
     console.log('Skipping highlighting:', { isProcessing, keywordsCount: keywords.length });
     return;
   }
-  
+
   isProcessing = true;
-  
+
   // Reset matches
   matches = {};
   keywords.forEach(keywordObj => {
@@ -3351,11 +3426,11 @@ function highlightKeywords() {
     document.body,
     NodeFilter.SHOW_TEXT,
     {
-      acceptNode: function(node) {
+      acceptNode: function (node) {
         if (isInsideBadge(node)) {
           return NodeFilter.FILTER_REJECT;
         }
-        
+
         if (node.parentElement && (
           node.parentElement.tagName === 'SCRIPT' ||
           node.parentElement.tagName === 'STYLE' ||
@@ -3364,7 +3439,7 @@ function highlightKeywords() {
         )) {
           return NodeFilter.FILTER_REJECT;
         }
-        
+
         return NodeFilter.FILTER_ACCEPT;
       }
     }
@@ -3377,24 +3452,24 @@ function highlightKeywords() {
       textNodes.push(node);
     }
   }
-  
+
 
   textNodes.forEach(textNode => {
     if (processedElements.has(textNode) || isInsideBadge(textNode)) return;
-    
+
     let text = textNode.textContent;
     let hasMatches = false;
-    
+
     keywords.forEach(keywordObj => {
       const regex = new RegExp(`\\b${escapeRegExp(keywordObj.text)}\\b`, 'gi');
       if (regex.test(text)) {
         hasMatches = true;
       }
     });
-    
+
     if (hasMatches) {
       let newHTML = text;
-      
+
       keywords.forEach(keywordObj => {
         const regex = new RegExp(`\\b(${escapeRegExp(keywordObj.text)})\\b`, 'gi');
         newHTML = newHTML.replace(regex, (match) => {
@@ -3402,18 +3477,18 @@ function highlightKeywords() {
           return `<span class="keyword-highlight" style="--highlight-color: ${keywordObj.color}">${match}</span>`;
         });
       });
-      
+
       if (newHTML !== text) {
         const wrapper = document.createElement('span');
         wrapper.className = 'keyword-highlight-container';
         wrapper.innerHTML = newHTML;
-        
+
         textNode.parentNode.replaceChild(wrapper, textNode);
         processedElements.add(wrapper);
       }
     }
   });
-  
+
 
   updateBadge();
   isProcessing = false;
@@ -4120,24 +4195,24 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Collect job information by flexible element detection
-function collectJobElements() { 
+function collectJobElements() {
   // Temporarily hide the badge to exclude it from content collection
   const badge = document.getElementById('keyword-highlighter-badge');
   let badgeWasHidden = false;
-  
+
   if (badge) {
     badgeWasHidden = badge.style.display === 'none';
     badge.style.display = 'none';
   }
-  
+
   // Get the body content without the badge
   const content = cleanHtmlContent(document.body.outerHTML);
-  
+
   // Restore badge visibility if it was visible before
   if (badge && !badgeWasHidden) {
     badge.style.display = 'block';
   }
-  
+
   return content;
 }
 
@@ -4180,7 +4255,7 @@ window.addEventListener('keydown', (e) => {
       chrome.runtime.sendMessage({
         action: 'updateJobRadarState',
         enabled: newEnabled
-      }).catch(() => {});
+      }).catch(() => { });
     });
 
     // Locally apply the same effect immediately

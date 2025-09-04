@@ -398,166 +398,125 @@ document.addEventListener('DOMContentLoaded', function() {
     { text: 'relocate', color: '#DDA0DD' }
   ];
   
-  // Load API keys from IndexedDB only (pure IndexedDB system)
+  // Load API keys from background script (which has access to Chrome storage)
   async function loadApiKeysFromStorage() {
     try {
-      // Load directly from IndexedDB (only storage system)
-      const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
-        apiKeyStorage.loadApiKeys('openai'),
-        apiKeyStorage.loadApiKeys('gemini')
-      ]);
+      console.log('🔄 Popup: Requesting API keys from background script...');
       
-      console.log('✅ Loaded API keys from IndexedDB:', {
-        openai: indexedOpenaiKeys.length,
-        gemini: indexedGeminiKeys.length
+      // Request API keys from background script
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'getApiKeys' }, (response) => {
+          console.log('🔄 Popup: Received response from background:', response);
+          resolve(response);
+        });
       });
       
-      return {
-        openaiKeys: indexedOpenaiKeys,
-        geminiKeys: indexedGeminiKeys
-      };
+      if (response && response.success) {
+        console.log('✅ Popup: Loaded API keys from background script:', {
+          openai: response.openaiKeys?.length || 0,
+          gemini: response.geminiKeys?.length || 0,
+          openaiKeys: response.openaiKeys?.map(k => ({ id: k.id, masked: k.masked })) || [],
+          geminiKeys: response.geminiKeys?.map(k => ({ id: k.id, masked: k.masked })) || []
+        });
+        
+        return {
+          openaiKeys: response.openaiKeys || [],
+          geminiKeys: response.geminiKeys || []
+        };
+      } else {
+        console.log('⚠️ Popup: No API keys found in background script, response:', response);
+        return { openaiKeys: [], geminiKeys: [] };
+      }
     } catch (error) {
-      console.error('❌ Error loading API keys from IndexedDB:', error);
+      console.error('❌ Popup: Error loading API keys from background script:', error);
       return { openaiKeys: [], geminiKeys: [] };
     }
   }
 
-  // IndexedDB Storage Manager for large numbers of API keys
+  // localStorage Storage Manager for API keys
   class ApiKeyStorageManager {
     constructor() {
-      this.dbName = 'JobRadarApiKeys';
-      this.dbVersion = 1;
-      this.db = null;
+      this.openaiKeysKey = 'jobRadarOpenaiKeys';
+      this.geminiKeysKey = 'jobRadarGeminiKeys';
     }
 
     async init() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(this.dbName, this.dbVersion);
-        
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          this.db = request.result;
-          resolve(this.db);
-        };
-        
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result;
-          
-          // Create object stores for API keys
-          if (!db.objectStoreNames.contains('openaiKeys')) {
-            const openaiStore = db.createObjectStore('openaiKeys', { keyPath: 'id' });
-            openaiStore.createIndex('key', 'key', { unique: true });
-            openaiStore.createIndex('status', 'status');
-          }
-          
-          if (!db.objectStoreNames.contains('geminiKeys')) {
-            const geminiStore = db.createObjectStore('geminiKeys', { keyPath: 'id' });
-            geminiStore.createIndex('key', 'key', { unique: true });
-            geminiStore.createIndex('status', 'status');
-          }
-        };
-      });
+      // localStorage doesn't need initialization
+      return Promise.resolve();
     }
 
     async saveApiKeys(provider, keys) {
-      if (!this.db) await this.init();
-      
-      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-      const transaction = this.db.transaction([storeName], 'readwrite');
-      const store = transaction.objectStore(storeName);
-      
-      // Clear existing keys first
-      await new Promise((resolve, reject) => {
-        const clearRequest = store.clear();
-        clearRequest.onsuccess = () => resolve();
-        clearRequest.onerror = () => reject(clearRequest.error);
-      });
-      
-      // Add new keys
-      const promises = keys.map(key => {
-        return new Promise((resolve, reject) => {
-          const addRequest = store.add(key);
-          addRequest.onsuccess = () => resolve();
-          addRequest.onerror = () => reject(addRequest.error);
-        });
-      });
-      
-      await Promise.all(promises);
-      console.log(`✅ Saved ${keys.length} ${provider} keys to IndexedDB`);
+      try {
+        const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+        localStorage.setItem(key, JSON.stringify(keys));
+        console.log(`✅ Saved ${keys.length} ${provider} keys to localStorage`);
+      } catch (error) {
+        console.error(`❌ Failed to save ${provider} keys to localStorage:`, error);
+        throw error;
+      }
     }
 
     async loadApiKeys(provider) {
-      if (!this.db) await this.init();
-      
-      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-      const transaction = this.db.transaction([storeName], 'readonly');
-      const store = transaction.objectStore(storeName);
-      
-      return new Promise((resolve, reject) => {
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
+      try {
+        const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : [];
+      } catch (error) {
+        console.error(`❌ Failed to load ${provider} keys from localStorage:`, error);
+        return [];
+      }
     }
 
     async addApiKey(provider, keyData) {
-      if (!this.db) await this.init();
-      
-      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-      const transaction = this.db.transaction([storeName], 'readwrite');
-      const store = transaction.objectStore(storeName);
-      
-      return new Promise((resolve, reject) => {
-        const request = store.add(keyData);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
+      try {
+        const keys = await this.loadApiKeys(provider);
+        keys.push(keyData);
+        await this.saveApiKeys(provider, keys);
+        console.log(`✅ Added ${provider} key: ${keyData.id}`);
+      } catch (error) {
+        console.error(`❌ Failed to add ${provider} key:`, error);
+        throw error;
+      }
     }
 
     async removeApiKey(provider, keyId) {
-      if (!this.db) await this.init();
-      
-      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-      const transaction = this.db.transaction([storeName], 'readwrite');
-      const store = transaction.objectStore(storeName);
-      
-      return new Promise((resolve, reject) => {
-        const request = store.delete(keyId);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
+      try {
+        const keys = await this.loadApiKeys(provider);
+        const filteredKeys = keys.filter(key => key.id !== keyId);
+        await this.saveApiKeys(provider, filteredKeys);
+        console.log(`✅ Removed ${provider} key: ${keyId}`);
+      } catch (error) {
+        console.error(`❌ Failed to remove ${provider} key:`, error);
+        throw error;
+      }
     }
 
     async getKeyCount(provider) {
-      if (!this.db) await this.init();
-      
-      const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-      const transaction = this.db.transaction([storeName], 'readonly');
-      const store = transaction.objectStore(storeName);
-      
-      return new Promise((resolve, reject) => {
-        const request = store.count();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
+      try {
+        const keys = await this.loadApiKeys(provider);
+        return keys.length;
+      } catch (error) {
+        console.error(`❌ Failed to get ${provider} key count:`, error);
+        return 0;
+      }
     }
   }
 
   // Initialize storage manager
   const apiKeyStorage = new ApiKeyStorageManager();
 
-  // One-time migration from Chrome storage to IndexedDB (if needed)
-  async function oneTimeMigrationToIndexedDB() {
+  // One-time migration from Chrome storage to localStorage (if needed)
+  async function oneTimeMigrationToLocalStorage() {
     try {
-      // Check if IndexedDB already has keys
-      const [indexedOpenaiKeys, indexedGeminiKeys] = await Promise.all([
+      // Check if localStorage already has keys
+      const [localOpenaiKeys, localGeminiKeys] = await Promise.all([
         apiKeyStorage.loadApiKeys('openai'),
         apiKeyStorage.loadApiKeys('gemini')
       ]);
       
-      // If IndexedDB already has keys, no migration needed
-      if (indexedOpenaiKeys.length > 0 || indexedGeminiKeys.length > 0) {
-        console.log('✅ IndexedDB already has API keys, no migration needed');
+      // If localStorage already has keys, no migration needed
+      if (localOpenaiKeys.length > 0 || localGeminiKeys.length > 0) {
+        console.log('✅ localStorage already has API keys, no migration needed');
         return;
       }
       
@@ -576,17 +535,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
       const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
       
-      // Migrate to IndexedDB if we found keys in Chrome storage
+      // Migrate to localStorage if we found keys in Chrome storage
       if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
-        console.log('🔄 One-time migration: Moving API keys from Chrome storage to IndexedDB...');
+        console.log('🔄 One-time migration: Moving API keys from Chrome storage to localStorage...');
         
         if (mergedOpenaiKeys.length > 0) {
           await apiKeyStorage.saveApiKeys('openai', mergedOpenaiKeys);
-          console.log(`✅ Migrated ${mergedOpenaiKeys.length} OpenAI keys to IndexedDB`);
+          console.log(`✅ Migrated ${mergedOpenaiKeys.length} OpenAI keys to localStorage`);
         }
         if (mergedGeminiKeys.length > 0) {
           await apiKeyStorage.saveApiKeys('gemini', mergedGeminiKeys);
-          console.log(`✅ Migrated ${mergedGeminiKeys.length} Gemini keys to IndexedDB`);
+          console.log(`✅ Migrated ${mergedGeminiKeys.length} Gemini keys to localStorage`);
         }
         
         console.log('🎉 One-time migration completed successfully!');
@@ -639,16 +598,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load AI provider settings
     currentProvider = result.aiProvider || 'openai';
     
-    // Run one-time migration from Chrome storage to IndexedDB (if needed)
-    await oneTimeMigrationToIndexedDB();
+    // Run one-time migration from Chrome storage to localStorage (if needed)
+    await oneTimeMigrationToLocalStorage();
     
-    // Load API keys from IndexedDB only
+    // Load API keys from localStorage only
     const apiKeysData = await loadApiKeysFromStorage();
     openaiKeys = apiKeysData.openaiKeys;
     geminiKeys = apiKeysData.geminiKeys;
     
     // Debug: Log what we loaded
-    console.log('Popup loaded API keys from IndexedDB:', {
+    console.log('Popup loaded API keys from localStorage:', {
       openai: openaiKeys.length,
       gemini: geminiKeys.length,
       openaiKeys: openaiKeys.map(k => ({ id: k.id, status: k.status, masked: k.masked })),
@@ -985,6 +944,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    console.log(`🔄 Popup: Starting batch processing of ${keys.length} ${provider} keys`);
+    
     // Show loading state with progress
     const addButton = provider === 'openai' ? document.getElementById('addOpenaiKey') : document.getElementById('addGeminiKey');
     const originalText = addButton.textContent;
@@ -1059,12 +1020,15 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (response.status === 'complete') {
         const { results, summary } = response;
+        console.log('✅ Popup: Background processing complete:', summary);
         
         // Check for duplicates and prepare keys for storage
         const existingKeys = provider === 'openai' ? openaiKeys : geminiKeys;
         let addedCount = 0;
         let duplicateCount = 0;
         const keysToSave = [];
+        
+        console.log(`🔄 Popup: Processing ${results.valid.length} valid keys, checking for duplicates...`);
         
         for (const validKey of results.valid) {
           const isDuplicate = existingKeys.some(key => key.key === validKey);
@@ -1092,49 +1056,41 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
         
-        // Save to background storage if we have keys to save
+                // Save to background storage if we have keys to save
         if (keysToSave.length > 0) {
           console.log(`Saving ${keysToSave.length} ${provider} keys to background storage...`);
           try {
+            // Add keys to local arrays first
+            if (provider === 'openai') {
+              openaiKeys.push(...keysToSave);
+            } else {
+              geminiKeys.push(...keysToSave);
+            }
+            
+            // Save through the new saveApiKeys handler
             const saveResponse = await new Promise((resolve, reject) => {
               chrome.runtime.sendMessage({
-                action: 'saveApiKeysToStorage',
-                provider: provider,
-                keys: keysToSave
+                action: 'saveApiKeys',
+                openaiKeys: provider === 'openai' ? openaiKeys : [],
+                geminiKeys: provider === 'gemini' ? geminiKeys : []
               }, (response) => {
                 if (chrome.runtime.lastError) {
                   reject(new Error(chrome.runtime.lastError.message));
                 } else {
                   resolve(response);
-            }
-          });
-        });
+                }
+              });
+            });
             console.log('Save response from background:', saveResponse);
           } catch (error) {
             console.error('Failed to save keys to background storage:', error);
           }
         }
         
-        // Reload API keys from IndexedDB to get the updated list
-        console.log('Reloading API keys from IndexedDB...');
-        const apiKeysData = await loadApiKeysFromStorage();
-        console.log('Reloaded API keys:', {
-          openai: apiKeysData.openaiKeys.length,
-          gemini: apiKeysData.geminiKeys.length
-        });
-        
-        if (provider === 'openai') {
-          openaiKeys = apiKeysData.openaiKeys;
-          console.log(`Updated openaiKeys array: ${openaiKeys.length} keys`);
-      } else {
-          geminiKeys = apiKeysData.geminiKeys;
-          console.log(`Updated geminiKeys array: ${geminiKeys.length} keys`);
-        }
-        
-        // Update UI
+        // Update UI with the new keys
+        console.log('Updating UI with new keys...');
         renderApiKeys();
         updateApiStats();
-        saveAiSettings();
         
         // Update progress display with final results
         const progressText = document.getElementById('progressText');
@@ -1476,20 +1432,33 @@ document.addEventListener('DOMContentLoaded', function() {
   
   async function saveAiSettings() {
     try {
-      // Save API keys to IndexedDB (primary storage for large numbers)
-      if (openaiKeys.length > 0) {
-        await apiKeyStorage.saveApiKeys('openai', openaiKeys);
-        console.log(`✅ Saved ${openaiKeys.length} OpenAI keys to IndexedDB`);
-      }
-      if (geminiKeys.length > 0) {
-        await apiKeyStorage.saveApiKeys('gemini', geminiKeys);
-        console.log(`✅ Saved ${geminiKeys.length} Gemini keys to IndexedDB`);
-      }
-      
-      console.log('🎉 All API keys saved to IndexedDB successfully:', { 
-        openai: openaiKeys.length, 
-        gemini: geminiKeys.length 
+      console.log('🔄 Popup: Saving API keys through background script...', {
+        openai: openaiKeys.length,
+        gemini: geminiKeys.length,
+        openaiKeys: openaiKeys.map(k => ({ id: k.id, masked: k.masked })),
+        geminiKeys: geminiKeys.map(k => ({ id: k.id, masked: k.masked }))
       });
+      
+      // Save API keys through background script (which has access to Chrome storage)
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'saveApiKeys',
+          openaiKeys: openaiKeys,
+          geminiKeys: geminiKeys
+        }, (response) => {
+          console.log('🔄 Popup: Received save response from background:', response);
+          resolve(response);
+        });
+      });
+      
+      if (response && response.success) {
+        console.log('✅ Popup: API keys saved through background script:', { 
+          openai: openaiKeys.length, 
+          gemini: geminiKeys.length 
+        });
+      } else {
+        console.error('❌ Popup: Failed to save API keys through background script:', response);
+      }
       
       // Save only essential settings to Chrome storage (no API keys)
       chrome.storage.sync.set({

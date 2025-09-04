@@ -1,79 +1,35 @@
-// IndexedDB Storage Manager for large numbers of API keys
+// localStorage Storage Manager for API keys
 class ApiKeyStorageManager {
   constructor() {
-    this.dbName = 'JobRadarApiKeys';
-    this.dbVersion = 1;
-    this.db = null;
+    this.openaiKeysKey = 'jobRadarOpenaiKeys';
+    this.geminiKeysKey = 'jobRadarGeminiKeys';
   }
 
   async init() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(this.db);
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        
-        // Create object stores for API keys
-        if (!db.objectStoreNames.contains('openaiKeys')) {
-          const openaiStore = db.createObjectStore('openaiKeys', { keyPath: 'id' });
-          openaiStore.createIndex('key', 'key', { unique: true });
-          openaiStore.createIndex('status', 'status');
-        }
-        
-        if (!db.objectStoreNames.contains('geminiKeys')) {
-          const geminiStore = db.createObjectStore('geminiKeys', { keyPath: 'id' });
-          geminiStore.createIndex('key', 'key', { unique: true });
-          geminiStore.createIndex('status', 'status');
-        }
-      };
-    });
+    // localStorage doesn't need initialization
+    return Promise.resolve();
   }
 
   async saveApiKeys(provider, keys) {
-    if (!this.db) await this.init();
-    
-    const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-    const transaction = this.db.transaction([storeName], 'readwrite');
-    const store = transaction.objectStore(storeName);
-    
-    // Clear existing keys first
-    await new Promise((resolve, reject) => {
-      const clearRequest = store.clear();
-      clearRequest.onsuccess = () => resolve();
-      clearRequest.onerror = () => reject(clearRequest.error);
-    });
-    
-    // Add new keys
-    const promises = keys.map(key => {
-      return new Promise((resolve, reject) => {
-        const addRequest = store.add(key);
-        addRequest.onsuccess = () => resolve();
-        addRequest.onerror = () => reject(addRequest.error);
-      });
-    });
-    
-    await Promise.all(promises);
-    console.log(`✅ Saved ${keys.length} ${provider} keys to IndexedDB`);
+    try {
+      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+      localStorage.setItem(key, JSON.stringify(keys));
+      console.log(`✅ Saved ${keys.length} ${provider} keys to localStorage`);
+    } catch (error) {
+      console.error(`❌ Failed to save ${provider} keys to localStorage:`, error);
+      throw error;
+    }
   }
 
   async loadApiKeys(provider) {
-    if (!this.db) await this.init();
-    
-    const storeName = provider === 'openai' ? 'openaiKeys' : 'geminiKeys';
-    const transaction = this.db.transaction([storeName], 'readonly');
-    const store = transaction.objectStore(storeName);
-    
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error(`❌ Failed to load ${provider} keys from localStorage:`, error);
+      return [];
+    }
   }
 }
 
@@ -90,25 +46,65 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.tabs.sendMessage(tab.id, {
             action: 'updateJobRadarState',
             enabled: message.enabled
-          }).catch(() => {});
+          }).catch(() => { });
         }
       });
     });
-    try { sendResponse({ status: 'broadcasted' }); } catch (_) {}
+    try { sendResponse({ status: 'broadcasted' }); } catch (_) { }
+    return true;
+  }
+
+  // Handle API key saving from popup
+  if (message && message.action === 'saveApiKeys') {
+    (async () => {
+      try {
+        const { openaiKeys, geminiKeys } = message;
+        
+        console.log('🔄 Background: Saving API keys from popup...');
+        
+        // Save to Chrome storage (background scripts can't access localStorage)
+        const storageData = {};
+        if (openaiKeys && openaiKeys.length > 0) {
+          storageData.openaiKeys = openaiKeys;
+          console.log(`✅ Background: Prepared ${openaiKeys.length} OpenAI keys for Chrome storage`);
+        }
+        if (geminiKeys && geminiKeys.length > 0) {
+          storageData.geminiKeys = geminiKeys;
+          console.log(`✅ Background: Prepared ${geminiKeys.length} Gemini keys for Chrome storage`);
+        }
+        
+        // Save to Chrome local storage
+        await new Promise((resolve, reject) => {
+          chrome.storage.local.set(storageData, () => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve();
+            }
+          });
+        });
+        
+        console.log('✅ Background: API keys saved to Chrome storage successfully');
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('❌ Background: Failed to save API keys:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true;
   }
 
   if (message && message.action === 'saveApiKeysToStorage') {
     (async () => {
       const { provider, keys } = message;
-      
+
       console.log(`🔄 Background: Saving ${keys.length} ${provider} keys to IndexedDB...`);
-      
+
       try {
         // Get existing keys from IndexedDB (primary storage)
         const existingKeys = await apiKeyStorage.loadApiKeys(provider);
         console.log(`📥 Background: Loaded ${existingKeys.length} existing ${provider} keys from IndexedDB`);
-        
+
         // Merge with new keys (avoid duplicates)
         const allKeys = [...existingKeys];
         let duplicatesFound = 0;
@@ -120,9 +116,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             duplicatesFound++;
           }
         }
-        
+
         console.log(`🔗 Background: Merged keys - ${allKeys.length} total, ${allKeys.length - existingKeys.length} new, ${duplicatesFound} duplicates skipped`);
-        
+
         // Save to IndexedDB (primary storage for large numbers)
         try {
           await apiKeyStorage.saveApiKeys(provider, allKeys);
@@ -131,20 +127,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.error(`❌ Background: Failed to save ${provider} keys to IndexedDB:`, storageError);
           throw new Error(`Storage failed: ${storageError.message}`);
         }
-        
+
         try {
-          sendResponse({ 
-            status: 'success', 
+          sendResponse({
+            status: 'success',
             totalKeys: allKeys.length,
             newKeys: allKeys.length - existingKeys.length
           });
-        } catch (_) {}
-        
+        } catch (_) { }
+
       } catch (error) {
         console.error('Failed to save API keys to storage:', error);
         try {
           sendResponse({ status: 'error', error: error.message });
-        } catch (_) {}
+        } catch (_) { }
       }
     })();
     return true;
@@ -155,21 +151,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.action === 'processApiKeysInBackground') {
     (async () => {
       const { provider, apiKeys, progressCallback } = message;
-      
+
       try {
         console.log(`🔄 Background processing ${apiKeys.length} ${provider} API keys`);
-        
+
         const results = {
           valid: [],
           invalid: [],
           errors: []
         };
-        
+
         // Process keys in batches to avoid overwhelming the system
         const batchSize = 5;
         for (let i = 0; i < apiKeys.length; i += batchSize) {
           const batch = apiKeys.slice(i, i + batchSize);
-          
+
           // Process batch in parallel
           const batchPromises = batch.map(async (apiKey, batchIndex) => {
             const globalIndex = i + batchIndex;
@@ -180,7 +176,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               } else {
                 results.invalid.push(apiKey);
               }
-              
+
               // Send progress update
               if (progressCallback) {
                 chrome.runtime.sendMessage({
@@ -190,31 +186,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   total: apiKeys.length,
                   valid: results.valid.length,
                   invalid: results.invalid.length
-                }).catch(() => {});
+                }).catch(() => { });
               }
-              
+
               // Small delay between API calls to avoid rate limiting
               await new Promise(resolve => setTimeout(resolve, 100));
-              
+
             } catch (error) {
               console.error(`Error testing API key ${globalIndex + 1}:`, error);
               results.errors.push({ key: apiKey, error: error.message });
             }
           });
-          
+
           await Promise.all(batchPromises);
-          
+
           // Longer delay between batches
           if (i + batchSize < apiKeys.length) {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
-        
+
         console.log(`✅ Background processing complete: ${results.valid.length} valid, ${results.invalid.length} invalid, ${results.errors.length} errors`);
-        
+
         try {
-          sendResponse({ 
-            status: 'complete', 
+          sendResponse({
+            status: 'complete',
             results,
             summary: {
               total: apiKeys.length,
@@ -223,13 +219,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               errors: results.errors.length
             }
           });
-        } catch (_) {}
-        
+        } catch (_) { }
+
       } catch (error) {
         console.error('Background API key processing failed:', error);
         try {
           sendResponse({ status: 'error', error: error.message });
-        } catch (_) {}
+        } catch (_) { }
       }
     })();
     return true;
@@ -238,29 +234,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.action === 'openUrlsInBackground' && Array.isArray(message.urls)) {
     (async () => {
       const urls = message.urls;
-      
+
       // Get AI settings and API keys for RPM calculation
       const aiSettings = await chrome.storage.sync.get(['aiProvider']);
       const aiProvider = aiSettings.aiProvider || 'openai';
-      
+
       // Load API keys from IndexedDB
       const [openaiKeys, geminiKeys] = await Promise.all([
         apiKeyStorage.loadApiKeys('openai'),
         apiKeyStorage.loadApiKeys('gemini')
       ]);
-      
+
       // Pre-assign API keys to URLs using urlNumber % numberOfApiKeys
       const urlKeyAssignments = preAssignKeysToUrls(aiProvider, openaiKeys, geminiKeys, urls);
-      
+
       // Calculate RPM-aware opening strategy
       const openingStrategy = calculateRpmAwareOpeningStrategy(aiProvider, openaiKeys, geminiKeys, urls.length);
-      
+
       console.log(`🚀 RPM-Aware URL Opening Strategy:`, openingStrategy);
       console.log(`🔑 URL-Key Pre-Assignments:`, urlKeyAssignments);
-      
+
       // Store URL-key assignments for content scripts to use
       await storeUrlKeyAssignments(urlKeyAssignments);
-      
+
       // Notify all content scripts about new URL-key assignments
       try {
         const tabs = await chrome.tabs.query({});
@@ -280,17 +276,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (error) {
         console.error('Failed to notify content scripts:', error);
       }
-      
+
       let openedCount = 0;
       let batchNumber = 1;
-      
+
       for (let i = 0; i < urls.length; i += openingStrategy.batchSize) {
         const batchUrls = urls.slice(i, i + openingStrategy.batchSize);
         const batchStartIndex = i + 1;
         const batchEndIndex = Math.min(i + openingStrategy.batchSize, urls.length);
-        
+
         console.log(`📦 Batch ${batchNumber}: Opening URLs ${batchStartIndex}-${batchEndIndex} (${batchUrls.length} URLs)`);
-        
+
         // Open all URLs in current batch simultaneously
         const batchPromises = batchUrls.map(async (url, batchIndex) => {
           const globalIndex = i + batchIndex;
@@ -303,22 +299,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.error(`❌ Failed to open URL ${globalIndex + 1}:`, error);
           }
         });
-        
+
         await Promise.all(batchPromises);
-        
+
         // Wait between batches (except after the last batch)
         if (i + openingStrategy.batchSize < urls.length) {
-          console.log(`⏳ Waiting ${openingStrategy.batchDelay}ms before next batch (${openingStrategy.batchDelay/1000}s)`);
+          console.log(`⏳ Waiting ${openingStrategy.batchDelay}ms before next batch (${openingStrategy.batchDelay / 1000}s)`);
           await new Promise(resolve => setTimeout(resolve, openingStrategy.batchDelay));
           batchNumber++;
         }
       }
-      
+
       console.log(`✅ Finished opening ${openedCount}/${urls.length} URLs with RPM-aware strategy`);
-      
+
       try {
-        sendResponse({ 
-          status: 'done', 
+        sendResponse({
+          status: 'done',
           opened: openedCount,
           total: urls.length,
           strategy: openingStrategy
@@ -337,16 +333,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.action === 'getApiKeys') {
     (async () => {
       try {
-        const [openaiKeys, geminiKeys] = await Promise.all([
-          apiKeyStorage.loadApiKeys('openai'),
-          apiKeyStorage.loadApiKeys('gemini')
-        ]);
-        
+        // Load from Chrome storage (background scripts can't access localStorage)
+        const result = await new Promise((resolve, reject) => {
+          chrome.storage.local.get(['openaiKeys', 'geminiKeys'], (result) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(result);
+            }
+          });
+        });
+
+        const openaiKeys = result.openaiKeys || [];
+        const geminiKeys = result.geminiKeys || [];
+
         console.log('Background: Sending API keys to content script:', {
           openai: openaiKeys.length,
           gemini: geminiKeys.length
         });
-        
+
         // Debug: Log key details
         if (openaiKeys.length > 0) {
           console.log('OpenAI keys:', openaiKeys.map(k => ({ id: k.id, masked: k.masked, status: k.status })));
@@ -354,14 +359,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (geminiKeys.length > 0) {
           console.log('Gemini keys:', geminiKeys.map(k => ({ id: k.id, masked: k.masked, status: k.status })));
         }
-        
+
         try {
           sendResponse({
             success: true,
             openaiKeys: openaiKeys,
             geminiKeys: geminiKeys
           });
-        } catch (_) {}
+        } catch (_) { }
       } catch (error) {
         console.error('Background: Error loading API keys for content script:', error);
         try {
@@ -369,7 +374,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             success: false,
             error: error.message
           });
-        } catch (_) {}
+        } catch (_) { }
       }
     })();
     return true;
@@ -405,13 +410,13 @@ async function testApiKeyInBackground(provider, apiKey) {
 function preAssignKeysToUrls(aiProvider, openaiKeys, geminiKeys, urls) {
   const validOpenaiKeys = openaiKeys.filter(key => key.status === 'valid');
   const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid');
-  
+
   const assignments = [];
-  
+
   for (let i = 0; i < urls.length; i++) {
     const urlNumber = i + 1; // 1-based indexing
     let assignedKey = null;
-    
+
     if (aiProvider === 'openai' && validOpenaiKeys.length > 0) {
       const keyIndex = (urlNumber - 1) % validOpenaiKeys.length; // 0-based for array indexing
       assignedKey = validOpenaiKeys[keyIndex];
@@ -419,7 +424,7 @@ function preAssignKeysToUrls(aiProvider, openaiKeys, geminiKeys, urls) {
       const keyIndex = (urlNumber - 1) % validGeminiKeys.length; // 0-based for array indexing
       assignedKey = validGeminiKeys[keyIndex];
     }
-    
+
     assignments.push({
       urlNumber: urlNumber,
       url: urls[i],
@@ -429,7 +434,7 @@ function preAssignKeysToUrls(aiProvider, openaiKeys, geminiKeys, urls) {
       keyIndex: assignedKey ? (urlNumber - 1) % (aiProvider === 'openai' ? validOpenaiKeys.length : validGeminiKeys.length) : null
     });
   }
-  
+
   console.log(`🔑 Pre-assigned ${assignments.length} URLs to ${aiProvider} keys:`, {
     totalUrls: urls.length,
     availableKeys: aiProvider === 'openai' ? validOpenaiKeys.length : validGeminiKeys.length,
@@ -440,7 +445,7 @@ function preAssignKeysToUrls(aiProvider, openaiKeys, geminiKeys, urls) {
       keyMasked: a.keyMasked
     }))
   });
-  
+
   return assignments;
 }
 
@@ -461,7 +466,7 @@ async function storeUrlKeyAssignments(assignments) {
 // Calculate RPM-aware opening strategy based on API limits
 function calculateRpmAwareOpeningStrategy(aiProvider, openaiKeys, geminiKeys, totalUrls) {
   const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
-  
+
   let strategy = {
     provider: aiProvider,
     totalUrls: totalUrls,
@@ -470,41 +475,41 @@ function calculateRpmAwareOpeningStrategy(aiProvider, openaiKeys, geminiKeys, to
     totalBatches: Math.ceil(totalUrls / 1),
     estimatedTime: (totalUrls - 1) * 300
   };
-  
+
   if (aiProvider === 'gemini' && validGeminiKeys > 0) {
-    // Gemini: max(200ms, 60s/(15 * api_key_count))
-    const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
+    // Gemini: max(2000ms, 60s/(15 * api_key_count)) - increased delays to prevent rate limiting
+    const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count) - back to 60s
     const calculatedDelay = delayPerKey;
-    const finalDelay = Math.max(200, calculatedDelay);
-    
+    const finalDelay = Math.max(2000, calculatedDelay); // Increased minimum to 2000ms to prevent rate limiting
+
     strategy.batchDelay = finalDelay;
     strategy.batchSize = 1; // Open one URL at a time
     strategy.totalBatches = totalUrls;
     strategy.estimatedTime = (totalUrls - 1) * finalDelay;
-    
+
     console.log(`🔑 Gemini Strategy: ${validGeminiKeys} keys, delay per key: ${delayPerKey}ms, calculated: ${calculatedDelay}ms, final: ${finalDelay}ms`);
   } else {
-    // OpenAI or no AI key: 0.3s (300ms) delay
-    strategy.batchDelay = 300;
+    // OpenAI or no AI key: 0.1s (100ms) delay
+    strategy.batchDelay = 100;
     strategy.batchSize = 1;
     strategy.totalBatches = totalUrls;
-    strategy.estimatedTime = (totalUrls - 1) * 300;
-    
-    console.log(`🔑 OpenAI/No AI Strategy: 300ms delay between URLs`);
+    strategy.estimatedTime = (totalUrls - 1) * 100;
+
+    console.log(`🔑 OpenAI/No AI Strategy: 100ms delay between URLs`);
   }
-  
+
   // Add safety margin and round values
   strategy.batchDelay = Math.round(strategy.batchDelay);
   strategy.estimatedTime = Math.round(strategy.estimatedTime);
-  
+
   console.log(`📊 RPM-Aware Strategy Calculated:`, {
     provider: strategy.provider,
     batchSize: strategy.batchSize,
-    batchDelay: `${strategy.batchDelay}ms (${strategy.batchDelay/1000}s)`,
+    batchDelay: `${strategy.batchDelay}ms (${strategy.batchDelay / 1000}s)`,
     totalBatches: strategy.totalBatches,
-    estimatedTime: `${strategy.estimatedTime/1000}s`
+    estimatedTime: `${strategy.estimatedTime / 1000}s`
   });
-  
+
   return strategy;
 }
 
@@ -513,18 +518,18 @@ function calculateSmartUrlDelay(aiProvider, geminiKeys) {
   if (aiProvider !== 'gemini') {
     return 300; // OpenAI or no AI key: 0.3s
   }
-  
+
   const validGeminiKeys = geminiKeys.filter(key => key.status === 'valid').length;
-  
+
   if (validGeminiKeys <= 0) {
     return 300; // Fallback to 300ms if no keys
   }
-  
+
   // Gemini: max(200ms, 60s/(15 * api_key_count))
   const delayPerKey = 60000 / (15 * validGeminiKeys); // 60s / (15 * key_count)
   const calculatedDelay = delayPerKey;
-  const finalDelay = Math.max(200, calculatedDelay);
-  
+  const finalDelay = Math.max(1000, calculatedDelay);
+
   return Math.round(finalDelay);
 }
 
