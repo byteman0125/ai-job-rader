@@ -3,8 +3,13 @@
   "name": "AI Job Radar",
   "version": "1.0",
   "description": "Highlights predefined keywords on web pages with customizable colors and extracts job information",
-  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite"],
-  "host_permissions": ["https://api.openai.com/*", "https://generativelanguage.googleapis.com/*"],
+  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite", "identity"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },

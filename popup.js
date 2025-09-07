@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const copyIncludeFoundedDate = document.getElementById('copyIncludeFoundedDate');
   const copyIncludeTechStack = document.getElementById('copyIncludeTechStack');
   const copyIncludeMatchRate = document.getElementById('copyIncludeMatchRate');
+  const copyIncludeSalary = document.getElementById('copyIncludeSalary');
   
   // About Extension functionality
   aboutBtn.addEventListener('click', function() {
@@ -297,6 +298,17 @@ document.addEventListener('DOMContentLoaded', function() {
   // Tab management elements
   const tabs = document.querySelectorAll('.tab');
   const tabContents = document.querySelectorAll('.tab-content');
+  // Sheets tab elements
+  const sheetUrlInput = document.getElementById('sheetUrl');
+  const sheetNameInput = document.getElementById('sheetName');
+  const todoSheetUrlInput = document.getElementById('todoSheetUrl');
+  const urlCheckSheetUrlInput = document.getElementById('urlCheckSheetUrl');
+  const googleClientIdInput = document.getElementById('googleClientId');
+  const googleSignInBtn = document.getElementById('googleSignIn');
+  const googleAuthStatus = document.getElementById('googleAuthStatus');
+  const testSheetsSyncBtn = document.getElementById('testSheetsSync');
+  const testSheetsWriteBtn = document.getElementById('testSheetsWrite');
+  const sheetsStatus = document.getElementById('sheetsStatus');
   
   // Tab switching functionality
   tabs.forEach(tab => {
@@ -312,6 +324,345 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById(`${targetTab}-tab`).classList.add('active');
     });
   });
+
+  // ---- Google Sheets Integration ----
+  function showSheetsStatus(message, type) {
+    if (!sheetsStatus) return;
+    sheetsStatus.textContent = message;
+    sheetsStatus.className = `api-status ${type}`;
+    sheetsStatus.style.display = 'block';
+  }
+
+  function extractSheetInfo(sheetUrl) {
+    try {
+      const idMatch = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      const sheetId = idMatch ? idMatch[1] : null;
+      let gid = null;
+      try {
+        const u = new URL(sheetUrl);
+        if (u.hash) {
+          const params = new URLSearchParams(u.hash.replace(/^#/, ''));
+          const gidStr = params.get('gid');
+          if (gidStr && /^\d+$/.test(gidStr)) gid = parseInt(gidStr, 10);
+        }
+      } catch (_) {}
+      return { sheetId, gid };
+    } catch (_) { return { sheetId: null, gid: null }; }
+  }
+
+  // Debounce helper for auto-save
+  function debounce(fn, delay) {
+    let timerId;
+    return function(...args) {
+      clearTimeout(timerId);
+      timerId = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  const autoSaveSheetsCfg = debounce(() => {
+    const payload = {
+      todoSheetUrl: todoSheetUrlInput?.value?.trim() || '',
+      urlCheckSheetUrl: urlCheckSheetUrlInput?.value?.trim() || '',
+      googleClientId: googleClientIdInput?.value?.trim() || ''
+    };
+    chrome.storage.sync.set(payload, () => {
+      if (!chrome.runtime.lastError) {
+        showSheetsStatus('Settings saved', 'success');
+      }
+    });
+  }, 400);
+
+  // Load saved Sheets config
+  chrome.storage.sync.get(['todoSheetUrl', 'urlCheckSheetUrl', 'googleClientId'], (cfg) => {
+    if (todoSheetUrlInput && cfg.todoSheetUrl) todoSheetUrlInput.value = cfg.todoSheetUrl;
+    if (urlCheckSheetUrlInput && cfg.urlCheckSheetUrl) urlCheckSheetUrlInput.value = cfg.urlCheckSheetUrl;
+    if (googleClientIdInput && cfg.googleClientId) googleClientIdInput.value = cfg.googleClientId;
+  });
+  
+  // Load OAuth token from local storage (more secure and persistent)
+  chrome.storage.local.get(['googleAccessToken', 'googleTokenExpiry'], (cfg) => {
+    if (googleAuthStatus && cfg.googleAccessToken && cfg.googleTokenExpiry && Date.now() < cfg.googleTokenExpiry - 30000) {
+      googleAuthStatus.textContent = '✅';
+    }
+  });
+
+  // Removed explicit Save; auto-save is active on input/paste
+
+  // Auto-save on input/paste
+  if (todoSheetUrlInput) {
+    todoSheetUrlInput.addEventListener('input', autoSaveSheetsCfg);
+    todoSheetUrlInput.addEventListener('paste', () => setTimeout(autoSaveSheetsCfg, 0));
+  }
+  if (urlCheckSheetUrlInput) {
+    urlCheckSheetUrlInput.addEventListener('input', autoSaveSheetsCfg);
+    urlCheckSheetUrlInput.addEventListener('paste', () => setTimeout(autoSaveSheetsCfg, 0));
+  }
+  if (googleClientIdInput) {
+    googleClientIdInput.addEventListener('input', autoSaveSheetsCfg);
+    googleClientIdInput.addEventListener('paste', () => setTimeout(autoSaveSheetsCfg, 0));
+  }
+
+  // OAuth sign-in
+  if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', async () => {
+      console.log('Google Sign-In button clicked');
+      const clientId = googleClientIdInput?.value?.trim();
+      if (!clientId) {
+        showSheetsStatus('Enter your Google Client ID', 'error');
+        return;
+      }
+      try {
+        // Button loading state
+        const originalText = googleSignInBtn.textContent;
+        googleSignInBtn.textContent = 'Signing in...';
+        googleSignInBtn.disabled = true;
+        const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
+        const scope = encodeURIComponent('https://www.googleapis.com/auth/spreadsheets');
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&prompt=consent`;
+        const responseUrl = await new Promise((resolve, reject) => {
+          chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (redirectedTo) => {
+            if (chrome.runtime.lastError) {
+              console.error('launchWebAuthFlow error:', chrome.runtime.lastError);
+              return reject(new Error(chrome.runtime.lastError.message));
+            }
+            if (!redirectedTo) return reject(new Error('No redirect'));
+            resolve(redirectedTo);
+          });
+        });
+        const hash = new URL(responseUrl).hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const expiresInSec = parseInt(params.get('expires_in') || '0', 10);
+        if (!accessToken) throw new Error('No access token');
+        const expiryTs = Date.now() + (expiresInSec * 1000);
+        chrome.storage.local.set({ googleAccessToken: accessToken, googleTokenExpiry: expiryTs }, () => {
+          showSheetsStatus('Signed in. Token stored persistently.', 'success');
+          if (googleAuthStatus) googleAuthStatus.textContent = '✅';
+        });
+        // restore button
+        googleSignInBtn.textContent = originalText;
+        googleSignInBtn.disabled = false;
+      } catch (e) {
+        console.error('OAuth failed:', e);
+        showSheetsStatus('Sign-in failed', 'error');
+        if (googleAuthStatus) googleAuthStatus.textContent = '❌';
+        try {
+          googleSignInBtn.textContent = 'Sign in with Google';
+          googleSignInBtn.disabled = false;
+        } catch (_) {}
+      }
+    });
+  }
+
+  async function getValidAccessToken() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['googleAccessToken', 'googleTokenExpiry'], (cfg) => {
+        if (cfg.googleAccessToken && cfg.googleTokenExpiry && Date.now() < cfg.googleTokenExpiry - 30000) {
+          resolve(cfg.googleAccessToken);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  // Setup Sync test for specific input/button pair
+  function setupSyncTest(buttonEl, inputEl) {
+    if (!buttonEl) return;
+    buttonEl.addEventListener('click', async () => {
+      const sheetUrl = inputEl?.value?.trim();
+      if (!sheetUrl) { showSheetsStatus('Enter a Google Sheet URL first', 'error'); return; }
+      const { sheetId, gid } = extractSheetInfo(sheetUrl);
+      if (!sheetId) { showSheetsStatus('Invalid Sheet URL', 'error'); return; }
+      showSheetsStatus('Testing read access...', 'loading');
+      try {
+        const csvUrl = gid != null
+          ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`
+          : `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
+        const resp = await fetch(csvUrl, { method: 'GET' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const preview = text.split('\n').slice(0, 3).join('\n');
+        console.log('Sheets CSV preview:', preview);
+        showSheetsStatus('Read test OK (published CSV). Writing needs OAuth.', 'success');
+      } catch (err) {
+        console.error('Sheets read test failed:', err);
+        showSheetsStatus('Read test failed. Ensure the sheet is published or public.', 'error');
+      }
+    });
+  }
+
+  setupSyncTest(document.getElementById('testTodoSync'), document.getElementById('todoSheetUrl'));
+  setupSyncTest(document.getElementById('testUrlCheckSync'), document.getElementById('urlCheckSheetUrl'));
+
+  // ---- Auto Check pipeline helpers ----
+  async function fetchRows(sheetUrl) {
+    const { sheetId, gid } = extractSheetInfo(sheetUrl);
+    if (!sheetId) throw new Error('Invalid sheet URL');
+    const token = await getValidAccessToken();
+    if (!token) throw new Error('Not signed in');
+    // Resolve title
+    let sheetName = gid != null ? await getSheetTitleByGid(sheetId, gid, token) : null;
+    if (!sheetName) sheetName = await getFirstSheetTitle(sheetId, token);
+    const range = `${sheetName}!A:G`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!resp.ok) throw new Error(`Read HTTP ${resp.status}`);
+    const data = await resp.json();
+    return { sheetId, sheetName, token, values: data.values || [] };
+  }
+
+  async function writeRow(sheetId, sheetName, token, rowIndex, rowValues) {
+    const range = `${sheetName}!A${rowIndex}:G${rowIndex}`;
+    const body = { range, majorDimension: 'ROWS', values: [rowValues] };
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+    const resp = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!resp.ok) throw new Error(`Write HTTP ${resp.status}`);
+  }
+
+  async function colorCell(sheetId, sheetName, token, rowIndex, colIndex, isGreen) {
+    // get numeric sheetId for formatting
+    const metaResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties(sheetId,title))`, { headers: { Authorization: `Bearer ${token}` } });
+    const meta = await metaResp.json();
+    const sh = (meta.sheets || []).find(s => s.properties && s.properties.title === sheetName);
+    const numericId = sh?.properties?.sheetId;
+    if (numericId == null) return;
+    const rgb = isGreen ? { red: 0.8, green: 0.95, blue: 0.8 } : { red: 0.98, green: 0.85, blue: 0.85 };
+    const req = {
+      repeatCell: {
+        range: { sheetId: numericId, startRowIndex: rowIndex - 1, endRowIndex: rowIndex, startColumnIndex: colIndex - 1, endColumnIndex: colIndex },
+        cell: { userEnteredFormat: { backgroundColor: rgb } },
+        fields: 'userEnteredFormat.backgroundColor'
+      }
+    };
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: [req] })
+    });
+  }
+
+  async function openAndAnalyze(url) {
+    // Open via background; placeholder analysis delay
+    await chrome.runtime.sendMessage({ action: 'openUrlsInBackground', urls: [url] });
+    // TODO: integrate with content.js to return real jobInfo
+    return new Promise((resolve) => setTimeout(() => resolve({ company: '', position: '', industry: '', jobType: '' }), 3000));
+  }
+
+  const startAutoCheckBtn = document.getElementById('startAutoCheck');
+  if (startAutoCheckBtn) {
+    // Initialize button state from background
+    chrome.runtime.sendMessage({ action: 'getAutoCheckStatus' }, (resp) => {
+      if (resp && resp.running) {
+        startAutoCheckBtn.dataset.state = 'running';
+        startAutoCheckBtn.textContent = 'Stop Auto-check';
+      } else {
+        startAutoCheckBtn.dataset.state = 'stopped';
+        startAutoCheckBtn.textContent = 'Start Auto-check';
+      }
+    });
+    startAutoCheckBtn.addEventListener('click', async () => {
+      try {
+        const isStopping = startAutoCheckBtn.dataset.state === 'running';
+        const sheetUrl = document.getElementById('urlCheckSheetUrl')?.value?.trim();
+        if (!sheetUrl) { showSheetsStatus('Enter URL Auto-check Sheet URL', 'error'); return; }
+
+        if (isStopping) {
+          await chrome.runtime.sendMessage({ action: 'stopAutoCheck' });
+          startAutoCheckBtn.dataset.state = 'stopped';
+          startAutoCheckBtn.textContent = 'Start Auto-check';
+          showSheetsStatus('Stopping...', 'info');
+          return;
+        }
+
+        showSheetsStatus('Starting auto-check in background...', 'loading');
+        startAutoCheckBtn.dataset.state = 'running';
+        startAutoCheckBtn.textContent = 'Stop Auto-check';
+        chrome.runtime.sendMessage({ action: 'startAutoCheck', sheetUrl }, (resp) => {
+          if (resp && resp.ok && resp.done) {
+            startAutoCheckBtn.dataset.state = 'stopped';
+            startAutoCheckBtn.textContent = 'Start Auto-check';
+            showSheetsStatus('Auto-check completed', 'success');
+          }
+        });
+      } catch (e) {
+        console.error('Auto-check failed:', e);
+        showSheetsStatus('Auto-check failed. See console.', 'error');
+        startAutoCheckBtn.dataset.state = 'stopped';
+        startAutoCheckBtn.textContent = 'Start Auto-check';
+      }
+    });
+  }
+  async function getFirstSheetTitle(sheetId, token) {
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties(title))`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!resp.ok) throw new Error(`Meta HTTP ${resp.status}`);
+    const data = await resp.json();
+    return data.sheets?.[0]?.properties?.title || 'Sheet1';
+  }
+
+  async function getSheetTitleByGid(sheetId, gid, token) {
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties(sheetId,title))`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!resp.ok) throw new Error(`Meta HTTP ${resp.status}`);
+    const data = await resp.json();
+    const found = (data.sheets || []).find(s => s.properties && s.properties.sheetId === gid);
+    return found?.properties?.title || null;
+  }
+
+  function setupWriteTest(buttonEl, inputEl, defaultSheetName) {
+    if (!buttonEl) return;
+    buttonEl.addEventListener('click', async () => {
+      const sheetUrl = inputEl?.value?.trim();
+      if (!sheetUrl) { showSheetsStatus('Enter a Google Sheet URL', 'error'); return; }
+      const { sheetId, gid } = extractSheetInfo(sheetUrl);
+      if (!sheetId) { showSheetsStatus('Invalid Sheet URL', 'error'); return; }
+      const token = await getValidAccessToken();
+      if (!token) { showSheetsStatus('Sign in first', 'error'); return; }
+      showSheetsStatus('Testing write (append)...', 'loading');
+      try {
+        // Prefer target tab by gid or provided name; otherwise use first tab
+        let sheetName = null;
+        if (gid != null) {
+          sheetName = await getSheetTitleByGid(sheetId, gid, token);
+        }
+        if (!sheetName) sheetName = defaultSheetName || await getFirstSheetTitle(sheetId, token);
+        const body = {
+          range: `${sheetName}!A1`,
+          majorDimension: 'ROWS',
+          values: [[new Date().toISOString(), 'AI Job Radar', 'Write test OK']]
+        };
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          console.error('Sheets write error:', resp.status, errText);
+          if (resp.status === 401) {
+            showSheetsStatus('401 Unauthorized. Please sign in again.', 'error');
+          } else if (resp.status === 403) {
+            showSheetsStatus('403 Forbidden. Ensure the signed-in account has Editor access.', 'error');
+          } else if (resp.status === 404) {
+            showSheetsStatus('404 Not found. Check the Sheet URL/ID.', 'error');
+          } else {
+            showSheetsStatus(`Write failed (HTTP ${resp.status}). See console for details.`, 'error');
+          }
+          return;
+        }
+        showSheetsStatus('Write test OK (row appended)', 'success');
+      } catch (e) {
+        console.error('Sheets write failed:', e);
+        showSheetsStatus('Write test failed. Ensure edit access.', 'error');
+      }
+    });
+  }
+
+  // If you name your tabs exactly 'To-Do' and 'URL Auto-check', we'll target them.
+  setupWriteTest(document.getElementById('testTodoWrite'), document.getElementById('todoSheetUrl'), 'To-Do');
+  setupWriteTest(document.getElementById('testUrlCheckWrite'), document.getElementById('urlCheckSheetUrl'), 'URL Auto-check');
   
   // URL Opener functionality
   const urlTextarea = document.getElementById('urlTextarea');
@@ -433,133 +784,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // localStorage Storage Manager for API keys
-  class ApiKeyStorageManager {
-    constructor() {
-      this.openaiKeysKey = 'jobRadarOpenaiKeys';
-      this.geminiKeysKey = 'jobRadarGeminiKeys';
-    }
-
-    async init() {
-      // localStorage doesn't need initialization
-      return Promise.resolve();
-    }
-
-    async saveApiKeys(provider, keys) {
-      try {
-        const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
-        localStorage.setItem(key, JSON.stringify(keys));
-        console.log(`✅ Saved ${keys.length} ${provider} keys to localStorage`);
-      } catch (error) {
-        console.error(`❌ Failed to save ${provider} keys to localStorage:`, error);
-        throw error;
-      }
-    }
-
-    async loadApiKeys(provider) {
-      try {
-        const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : [];
-      } catch (error) {
-        console.error(`❌ Failed to load ${provider} keys from localStorage:`, error);
-        return [];
-      }
-    }
-
-    async addApiKey(provider, keyData) {
-      try {
-        const keys = await this.loadApiKeys(provider);
-        keys.push(keyData);
-        await this.saveApiKeys(provider, keys);
-        console.log(`✅ Added ${provider} key: ${keyData.id}`);
-      } catch (error) {
-        console.error(`❌ Failed to add ${provider} key:`, error);
-        throw error;
-      }
-    }
-
-    async removeApiKey(provider, keyId) {
-      try {
-        const keys = await this.loadApiKeys(provider);
-        const filteredKeys = keys.filter(key => key.id !== keyId);
-        await this.saveApiKeys(provider, filteredKeys);
-        console.log(`✅ Removed ${provider} key: ${keyId}`);
-      } catch (error) {
-        console.error(`❌ Failed to remove ${provider} key:`, error);
-        throw error;
-      }
-    }
-
-    async getKeyCount(provider) {
-      try {
-        const keys = await this.loadApiKeys(provider);
-        return keys.length;
-      } catch (error) {
-        console.error(`❌ Failed to get ${provider} key count:`, error);
-        return 0;
-      }
-    }
-  }
-
-  // Initialize storage manager
-  const apiKeyStorage = new ApiKeyStorageManager();
-
-  // One-time migration from Chrome storage to localStorage (if needed)
-  async function oneTimeMigrationToLocalStorage() {
-    try {
-      // Check if localStorage already has keys
-      const [localOpenaiKeys, localGeminiKeys] = await Promise.all([
-        apiKeyStorage.loadApiKeys('openai'),
-        apiKeyStorage.loadApiKeys('gemini')
-      ]);
-      
-      // If localStorage already has keys, no migration needed
-      if (localOpenaiKeys.length > 0 || localGeminiKeys.length > 0) {
-        console.log('✅ localStorage already has API keys, no migration needed');
-        return;
-      }
-      
-      // Check Chrome storage for existing keys
-      const [localData, syncData] = await Promise.all([
-        new Promise(resolve => chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve)),
-        new Promise(resolve => chrome.storage.sync.get(['openaiKeys', 'geminiKeys'], resolve))
-      ]);
-      
-      const openaiKeysLocal = localData.openaiKeys || [];
-      const geminiKeysLocal = localData.geminiKeys || [];
-      const openaiKeysSync = syncData.openaiKeys || [];
-      const geminiKeysSync = syncData.geminiKeys || [];
-      
-      // Use local storage if available, otherwise sync
-      const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
-      const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
-      
-      // Migrate to localStorage if we found keys in Chrome storage
-      if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
-        console.log('🔄 One-time migration: Moving API keys from Chrome storage to localStorage...');
-        
-        if (mergedOpenaiKeys.length > 0) {
-          await apiKeyStorage.saveApiKeys('openai', mergedOpenaiKeys);
-          console.log(`✅ Migrated ${mergedOpenaiKeys.length} OpenAI keys to localStorage`);
-        }
-        if (mergedGeminiKeys.length > 0) {
-          await apiKeyStorage.saveApiKeys('gemini', mergedGeminiKeys);
-          console.log(`✅ Migrated ${mergedGeminiKeys.length} Gemini keys to localStorage`);
-        }
-        
-        console.log('🎉 One-time migration completed successfully!');
-        
-        // Clear Chrome storage after successful migration
-        chrome.storage.local.remove(['openaiKeys', 'geminiKeys']);
-        chrome.storage.sync.remove(['openaiKeys', 'geminiKeys']);
-        console.log('🧹 Cleared API keys from Chrome storage');
-      }
-      
-    } catch (error) {
-      console.error('❌ One-time migration failed:', error);
-    }
-  }
+  // Removed legacy localStorage manager and migration; using background chrome.storage.local only.
 
   // Check storage quota and provide helpful error messages
   async function checkStorageQuota() {
@@ -583,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Load settings from storage
-  chrome.storage.sync.get(['keywords', 'aiProvider', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'coverLetterEnabled', 'aiAnalysisEnabled', 'copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], async function(result) {
+  chrome.storage.sync.get(['keywords', 'aiProvider', 'selectedOpenaiKey', 'selectedGeminiKey', 'openaiApiKey', 'jobRadarEnabled', 'coverLetterEnabled', 'aiAnalysisEnabled', 'copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate', 'copyIncludeSalary'], async function(result) {
     let keywords = result.keywords;
     
     // Initialize with default keywords if none exist
@@ -598,16 +823,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load AI provider settings
     currentProvider = result.aiProvider || 'openai';
     
-    // Run one-time migration from Chrome storage to localStorage (if needed)
-    await oneTimeMigrationToLocalStorage();
-    
-    // Load API keys from localStorage only
+    // Load API keys from background (chrome.storage.local)
     const apiKeysData = await loadApiKeysFromStorage();
     openaiKeys = apiKeysData.openaiKeys;
     geminiKeys = apiKeysData.geminiKeys;
     
     // Debug: Log what we loaded
-    console.log('Popup loaded API keys from localStorage:', {
+    console.log('Popup loaded API keys from background storage:', {
       openai: openaiKeys.length,
       gemini: geminiKeys.length,
       openaiKeys: openaiKeys.map(k => ({ id: k.id, status: k.status, masked: k.masked })),
@@ -691,21 +913,39 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAiAnalysisState(aiAnalysisEnabled);
 
     // Initialize copy preferences (defaults false)
+    console.log('🔧 Loading copy preferences:', {
+      copyIncludeIndustry: result.copyIncludeIndustry,
+      copyIncludeCompanySize: result.copyIncludeCompanySize,
+      copyIncludeFoundedDate: result.copyIncludeFoundedDate,
+      copyIncludeTechStack: result.copyIncludeTechStack,
+      copyIncludeMatchRate: result.copyIncludeMatchRate,
+      copyIncludeSalary: result.copyIncludeSalary
+    });
     copyIncludeIndustry.checked = result.copyIncludeIndustry === true;
     copyIncludeCompanySize.checked = result.copyIncludeCompanySize === true;
     copyIncludeFoundedDate.checked = result.copyIncludeFoundedDate === true;
     copyIncludeTechStack.checked = result.copyIncludeTechStack === true;
     copyIncludeMatchRate.checked = result.copyIncludeMatchRate === true;
+    copyIncludeSalary.checked = result.copyIncludeSalary === true;
   });
 
   // Persist copy preferences
   function saveCopyPrefs() {
-    chrome.storage.sync.set({
-      copyIncludeIndustry: copyIncludeIndustry.checked,
-      copyIncludeCompanySize: copyIncludeCompanySize.checked,
-      copyIncludeFoundedDate: copyIncludeFoundedDate.checked,
-      copyIncludeTechStack: copyIncludeTechStack.checked,
-      copyIncludeMatchRate: copyIncludeMatchRate.checked
+    const payload = {
+      copyIncludeIndustry: copyIncludeIndustry?.checked === true,
+      copyIncludeCompanySize: copyIncludeCompanySize?.checked === true,
+      copyIncludeFoundedDate: copyIncludeFoundedDate?.checked === true,
+      copyIncludeTechStack: copyIncludeTechStack?.checked === true,
+      copyIncludeMatchRate: copyIncludeMatchRate?.checked === true,
+      copyIncludeSalary: copyIncludeSalary?.checked === true
+    };
+    console.log('🔧 Saving copy preferences:', payload);
+    chrome.storage.sync.set(payload, () => {
+      if (chrome.runtime.lastError) {
+        console.error('Failed to save copy preferences:', chrome.runtime.lastError);
+      } else {
+        console.log('✅ Copy preferences saved');
+      }
     });
   }
 
@@ -714,6 +954,7 @@ document.addEventListener('DOMContentLoaded', function() {
   copyIncludeFoundedDate && copyIncludeFoundedDate.addEventListener('change', saveCopyPrefs);
   copyIncludeTechStack && copyIncludeTechStack.addEventListener('change', saveCopyPrefs);
   copyIncludeMatchRate && copyIncludeMatchRate.addEventListener('change', saveCopyPrefs);
+  copyIncludeSalary && copyIncludeSalary.addEventListener('change', saveCopyPrefs);
   
   // AI Provider Selection
   openaiProvider.addEventListener('change', function() {
@@ -1419,6 +1660,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const maxTokens = 250000;
         
         if (key.usage.requestsToday >= maxRequests || key.usage.tokensToday >= maxTokens) {
+          // Set RPD flag (daily recovery - next day)
+          key.usage.rpdLimited = true;
+          key.usage.rpdLimitedDate = new Date().toDateString();
+          
+          // Keep legacy flag for backward compatibility
           key.usage.isRateLimited = true;
           key.usage.rateLimitReset = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         }

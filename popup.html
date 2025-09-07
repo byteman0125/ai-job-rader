@@ -1348,6 +1348,9 @@
       <div class="tab" data-tab="keywords">
         <span>Highlight</span>
       </div>
+      <div class="tab" data-tab="sheets">
+        <span>Google Sheets</span>
+      </div>
     </div>
     
     <div class="tab-content" id="keywords-tab">
@@ -1484,6 +1487,56 @@
       </div>
     </div>
 
+    <div class="tab-content" id="sheets-tab">
+      <div class="section">
+        <div class="section-title">Google Sheets Integration</div>
+        <div class="api-form">
+          <div class="input-group">
+            <input type="text" id="googleClientId" class="keyword-input" placeholder="Google OAuth Client ID (for write)" />
+          </div>
+          <div class="api-buttons" style="margin-top: 8px; gap: 8px; align-items: center;">
+            <button id="googleSignIn" class="save-btn">Sign in with Google</button>
+            <span id="googleAuthStatus" title="Auth status" style="font-size:14px; margin-left:6px;">❌</span>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">To-Do Sheet</div>
+        <div class="api-form">
+          <div class="input-group">
+            <input type="text" id="todoSheetUrl" class="keyword-input" placeholder="Paste To-Do Google Sheet URL" />
+          </div>
+          <div class="api-buttons" style="margin-top: 8px; gap: 8px;">
+            <button id="testTodoSync" class="sync-btn">Test Sync</button>
+            <button id="testTodoWrite" class="sync-btn">Test Write</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">URL Auto-check Sheet</div>
+        <div class="api-form">
+          <div class="input-group">
+            <input type="text" id="urlCheckSheetUrl" class="keyword-input" placeholder="Paste URL Auto-check Google Sheet URL" />
+          </div>
+          <div class="api-buttons" style="margin-top: 8px; gap: 8px;">
+            <button id="testUrlCheckSync" class="sync-btn">Test Sync</button>
+            <button id="testUrlCheckWrite" class="sync-btn">Test Write</button>
+            <button id="startAutoCheck" class="sync-btn">Start Auto-check</button>
+          </div>
+        </div>
+        <div id="sheetsStatus" class="api-status" style="display: none;"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Notes</div>
+        <div class="add-key-help">
+          <ul>
+            <li>Reads use published CSV endpoint; writing requires OAuth.</li>
+            <li>To read: File → Share → Publish to the web, or ensure anyone with link can view.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     
     <div class="tab-content active" id="url-opener-tab">
             <div class="section">
@@ -1512,6 +1565,10 @@
             <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151;">
               <input type="checkbox" id="copyIncludeMatchRate">
               <span>ATS Match Rate</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151;">
+              <input type="checkbox" id="copyIncludeSalary">
+              <span>💰 Salary</span>
             </label>
           </div>
         </div>

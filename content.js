@@ -16,7 +16,7 @@ let geminiKeys = [];
 let selectedOpenaiKey = null;
 let selectedGeminiKey = null;
 let loadAttempts = 0;
-let maxLoadAttempts = 3;
+let maxLoadAttempts = 2;
 let loadFailed = false;
 let lastLoadError = null;
 let isRequestInProgress = false; // Prevent multiple simultaneous requests
@@ -27,105 +27,105 @@ let aiAnalysisEnabled = true; // Default to enabled
 let userLocation = null;
 let userWorkExperience = null;
 
-// Helper function to remove unnecessary elements from HTML content
-function cleanHtmlContent(htmlContent) {
-  if (!htmlContent || typeof htmlContent !== 'string') return htmlContent;
-
-  let cleaned = htmlContent;
-
-  // Remove script and style elements
-  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  cleaned = cleaned.replace(/<link[^>]*>/gi, '');
-  cleaned = cleaned.replace(/<meta[^>]*>/gi, '');
-
-  // Remove comments
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/gi, '');
-
-  // Remove SVG elements
-  cleaned = cleaned.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
-
-  // Remove images
-  cleaned = cleaned.replace(/<img[^>]*>/gi, '');
-
-  // Remove video/audio
-  cleaned = cleaned.replace(/<video[^>]*>[\s\S]*?<\/video>/gi, '');
-  cleaned = cleaned.replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, '');
-
-  // Remove iframes
-  cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '');
-
-  // Remove navigation and footer
-  cleaned = cleaned.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-  cleaned = cleaned.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-
-  // Remove forms
-  // cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
-  // cleaned = cleaned.replace(/<input[^>]*>/gi, '');
-  cleaned = cleaned.replace(/<button[^>]*>[\s\S]*?<\/button>/gi, '');
-
-  // Remove extension's own UI elements
-  cleaned = cleaned.replace(/<div[^>]*id="[^"]*keyword-highlighter-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*button-row[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-grid[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-item[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-ui[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-progress[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-result[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*count-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<button[^>]*class="[^"]*(?:copy-job-btn|extract-job-btn)[^"]*"[^>]*>[\s\S]*?<\/button>/gi, '');
-
-  // Remove any text content that might be from the badge UI
-  cleaned = cleaned.replace(/Company:\s*[^<]*<br>/gi, '');
-  cleaned = cleaned.replace(/Position:\s*[^<]*<br>/gi, '');
-  cleaned = cleaned.replace(/Job Information[^<]*/gi, '');
-  cleaned = cleaned.replace(/Job Detection Status[^<]*/gi, '');
-  cleaned = cleaned.replace(/Site:[^<]*/gi, '');
-  cleaned = cleaned.replace(/API Key:[^<]*/gi, '');
-  cleaned = cleaned.replace(/Job Info:[^<]*/gi, '');
-  cleaned = cleaned.replace(/matches found[^<]*/gi, '');
-  cleaned = cleaned.replace(/Total Keywords:[^<]*/gi, '');
-
-  // Remove more specific badge UI patterns
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-content[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-drag-handle[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*drag-icon[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-type-[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-icon[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-label[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-  cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-value[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-dots[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-fill[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-  cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-text[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-
-  // Remove any remaining badge-related text
-  cleaned = cleaned.replace(/Page Loading[^<]*/gi, '');
-  cleaned = cleaned.replace(/elapsed[^<]*/gi, '');
-  cleaned = cleaned.replace(/Extraction Failed[^<]*/gi, '');
-  cleaned = cleaned.replace(/Click to retry[^<]*/gi, '');
-  cleaned = cleaned.replace(/Extracting[^<]*/gi, '');
-  cleaned = cleaned.replace(/Available[^<]*/gi, '');
-  cleaned = cleaned.replace(/Job Site[^<]*/gi, '');
-  cleaned = cleaned.replace(/Not Job Site[^<]*/gi, '');
-  cleaned = cleaned.replace(/Missing[^<]*/gi, '');
-  cleaned = cleaned.replace(/Extracted[^<]*/gi, '');
-
-  // Remove style attributes
-  cleaned = cleaned.replace(/\s*style="[^"]*"/gi, '');
-
-  // Remove empty elements
-  cleaned = cleaned.replace(/<[^>]*>\s*<\/[^>]*>/gi, '');
-
-  // Clean up whitespace
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
-  return cleaned;
-}
+  // Helper function to remove unnecessary elements from HTML content
+  function cleanHtmlContent(htmlContent) {
+    if (!htmlContent || typeof htmlContent !== 'string') return htmlContent;
+    
+    let cleaned = htmlContent;
+    
+    // Remove script and style elements
+    cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    cleaned = cleaned.replace(/<link[^>]*>/gi, '');
+    cleaned = cleaned.replace(/<meta[^>]*>/gi, '');
+    
+    // Remove comments
+    cleaned = cleaned.replace(/<!--[\s\S]*?-->/gi, '');
+    
+    // Remove SVG elements
+    cleaned = cleaned.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
+    
+    // Remove images
+    cleaned = cleaned.replace(/<img[^>]*>/gi, '');
+    
+    // Remove video/audio
+    cleaned = cleaned.replace(/<video[^>]*>[\s\S]*?<\/video>/gi, '');
+    cleaned = cleaned.replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, '');
+    
+    // Remove iframes
+    cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '');
+    
+    // Remove navigation and footer
+    cleaned = cleaned.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
+    cleaned = cleaned.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+    
+    // Remove forms
+    // cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
+    // cleaned = cleaned.replace(/<input[^>]*>/gi, '');
+    cleaned = cleaned.replace(/<button[^>]*>[\s\S]*?<\/button>/gi, '');
+    
+    // Remove extension's own UI elements
+    cleaned = cleaned.replace(/<div[^>]*id="[^"]*keyword-highlighter-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*button-row[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-grid[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*status-item[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-ui[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-progress[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-result[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*keyword-info[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*count-badge[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<button[^>]*class="[^"]*(?:copy-job-btn|extract-job-btn)[^"]*"[^>]*>[\s\S]*?<\/button>/gi, '');
+    
+    // Remove any text content that might be from the badge UI
+    cleaned = cleaned.replace(/Company:\s*[^<]*<br>/gi, '');
+    cleaned = cleaned.replace(/Position:\s*[^<]*<br>/gi, '');
+    cleaned = cleaned.replace(/Job Information[^<]*/gi, '');
+    cleaned = cleaned.replace(/Job Detection Status[^<]*/gi, '');
+    cleaned = cleaned.replace(/Site:[^<]*/gi, '');
+    cleaned = cleaned.replace(/API Key:[^<]*/gi, '');
+    cleaned = cleaned.replace(/Job Info:[^<]*/gi, '');
+    cleaned = cleaned.replace(/matches found[^<]*/gi, '');
+    cleaned = cleaned.replace(/Total Keywords:[^<]*/gi, '');
+    
+    // Remove more specific badge UI patterns
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-content[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*badge-drag-handle[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*drag-icon[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-info-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*job-type-[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-icon[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-label[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+    cleaned = cleaned.replace(/<span[^>]*class="[^"]*status-value[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*loading-dots[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-fill[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*progress-text[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    
+    // Remove any remaining badge-related text
+    cleaned = cleaned.replace(/Page Loading[^<]*/gi, '');
+    cleaned = cleaned.replace(/elapsed[^<]*/gi, '');
+    cleaned = cleaned.replace(/Extraction Failed[^<]*/gi, '');
+    cleaned = cleaned.replace(/Click to retry[^<]*/gi, '');
+    cleaned = cleaned.replace(/Extracting[^<]*/gi, '');
+    cleaned = cleaned.replace(/Available[^<]*/gi, '');
+    cleaned = cleaned.replace(/Job Site[^<]*/gi, '');
+    cleaned = cleaned.replace(/Not Job Site[^<]*/gi, '');
+    cleaned = cleaned.replace(/Missing[^<]*/gi, '');
+    cleaned = cleaned.replace(/Extracted[^<]*/gi, '');
+        
+    // Remove style attributes
+    cleaned = cleaned.replace(/\s*style="[^"]*"/gi, '');
+    
+    // Remove empty elements
+    cleaned = cleaned.replace(/<[^>]*>\s*<\/[^>]*>/gi, '');
+    
+    // Clean up whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    return cleaned;
+  }
 
 // Helper function to get color for company size
 function getCompanySizeColor(companySize) {
@@ -159,47 +159,10 @@ const defaultKeywords = [
   { text: 'relocate', color: 'red' }
 ];
 
-// localStorage Storage Manager for API keys
-class ApiKeyStorageManager {
-  constructor() {
-    this.openaiKeysKey = 'jobRadarOpenaiKeys';
-    this.geminiKeysKey = 'jobRadarGeminiKeys';
-  }
-
-  async init() {
-    // localStorage doesn't need initialization
-    return Promise.resolve();
-  }
-
-  async saveApiKeys(provider, keys) {
-    try {
-      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
-      localStorage.setItem(key, JSON.stringify(keys));
-      console.log(`✅ Saved ${keys.length} ${provider} keys to localStorage`);
-    } catch (error) {
-      console.error(`❌ Failed to save ${provider} keys to localStorage:`, error);
-      throw error;
-    }
-  }
-
-  async loadApiKeys(provider) {
-    try {
-      const key = provider === 'openai' ? this.openaiKeysKey : this.geminiKeysKey;
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error(`❌ Failed to load ${provider} keys from localStorage:`, error);
-      return [];
-    }
-  }
-}
-
-// Initialize storage manager
-const apiKeyStorage = new ApiKeyStorageManager();
+// Storage manager no longer needed - using Chrome storage directly
 
 // Global flags to prevent multiple initializations
 let isStorageInitialized = false;
-let isMigrationRunning = false;
 
 // Global page counter for sequential key rotation
 let globalPageCounter = 0;
@@ -226,124 +189,114 @@ function resetPageCounter() {
 if (window.jobRadarContentScriptLoaded) {
   console.log('⏸️ Content script already loaded on this page, skipping initialization');
   // Still need to initialize storage for this instance
-  apiKeyStorage.init().then(() => {
-    isStorageInitialized = true;
-    console.log('✅ Content script: localStorage initialized (duplicate instance)');
-  }).catch((error) => {
-    console.error('❌ Content script: Failed to initialize localStorage (duplicate instance):', error);
-  });
+  // Skip duplicate initialization
+  console.log('✅ Content script: Duplicate instance detected, skipping initialization');
 } else {
   window.jobRadarContentScriptLoaded = true;
 }
 
-// Initialize localStorage
-apiKeyStorage.init().then(() => {
-  isStorageInitialized = true;
-  console.log('✅ Content script: localStorage initialized');
-}).catch((error) => {
-  console.error('❌ Content script: Failed to initialize localStorage:', error);
-});
+// Initialize storage
+isStorageInitialized = true;
+console.log('✅ Content script: Storage initialized');
 
-// One-time migration from Chrome storage to localStorage (if needed)
-async function oneTimeMigrationToLocalStorage() {
-  // Prevent multiple migrations from running simultaneously
-  if (isMigrationRunning) {
-    console.log('⏸️ Content script: Migration already running, skipping...');
-    return;
-  }
+// Migration no longer needed - using Chrome storage directly
 
-  isMigrationRunning = true;
-
-  try {
-    // Ensure localStorage is initialized
-    if (!isStorageInitialized) {
-      console.log('🔄 Content script: Initializing localStorage for migration...');
-      await apiKeyStorage.init();
-      isStorageInitialized = true;
+// Clean up expired flags from keys
+function cleanupExpiredFlags() {
+  const now = Date.now();
+  const today = new Date().toDateString();
+  let updated = false;
+  
+  // Clean up Gemini keys
+  geminiKeys.forEach(key => {
+    if (key.usage) {
+      // Clean up expired RPM flags (1 minute)
+      if (key.usage.rpmLimited && key.usage.rpmLimitedTime) {
+        const rpmResetTime = key.usage.rpmLimitedTime + 60000; // 1 minute
+        if (now >= rpmResetTime) {
+          delete key.usage.rpmLimited;
+          delete key.usage.rpmLimitedTime;
+          console.log(`🔄 Cleaned up expired RPM flag from key: ${key.masked}`);
+          updated = true;
+        }
+      }
+      
+      // Clean up expired RPD flags (daily)
+      if (key.usage.rpdLimited && key.usage.rpdLimitedDate) {
+        if (key.usage.rpdLimitedDate !== today) {
+          delete key.usage.rpdLimited;
+          delete key.usage.rpdLimitedDate;
+          console.log(`🔄 Cleaned up expired RPD flag from key: ${key.masked}`);
+          updated = true;
+        }
+      }
     }
-
-    // Check if Chrome storage already has keys
-    const result = await new Promise((resolve) => {
-      chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve);
+  });
+  
+  // Clean up OpenAI keys (if they have similar flags)
+  openaiKeys.forEach(key => {
+    if (key.usage) {
+      // Clean up expired RPM flags (1 minute)
+      if (key.usage.rpmLimited && key.usage.rpmLimitedTime) {
+        const rpmResetTime = key.usage.rpmLimitedTime + 60000; // 1 minute
+        if (now >= rpmResetTime) {
+          delete key.usage.rpmLimited;
+          delete key.usage.rpmLimitedTime;
+          console.log(`🔄 Cleaned up expired RPM flag from key: ${key.masked}`);
+          updated = true;
+        }
+      }
+      
+      // Clean up expired RPD flags (daily)
+      if (key.usage.rpdLimited && key.usage.rpdLimitedDate) {
+        if (key.usage.rpdLimitedDate !== today) {
+          delete key.usage.rpdLimited;
+          delete key.usage.rpdLimitedDate;
+          console.log(`🔄 Cleaned up expired RPD flag from key: ${key.masked}`);
+          updated = true;
+        }
+      }
+    }
+  });
+  
+  // Save updated keys if any flags were cleaned up
+  if (updated) {
+    chrome.storage.local.set({ 
+      openaiKeys: openaiKeys,
+      geminiKeys: geminiKeys 
+    }).then(() => {
+      console.log('💾 Cleaned up expired flags and saved to storage');
+    }).catch(error => {
+      console.error('Failed to save cleaned keys:', error);
     });
-    
-    const localOpenaiKeys = result.openaiKeys || [];
-    const localGeminiKeys = result.geminiKeys || [];
-
-    // If Chrome storage already has keys, no migration needed
-    if (localOpenaiKeys.length > 0 || localGeminiKeys.length > 0) {
-      console.log('✅ Content script: Chrome storage already has API keys, no migration needed');
-      return;
-    }
-
-    // Check Chrome storage for existing keys
-    const [localData, syncData] = await Promise.all([
-      new Promise(resolve => chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve)),
-      new Promise(resolve => chrome.storage.sync.get(['openaiKeys', 'geminiKeys'], resolve))
-    ]);
-
-    const openaiKeysLocal = localData.openaiKeys || [];
-    const geminiKeysLocal = localData.geminiKeys || [];
-    const openaiKeysSync = syncData.openaiKeys || [];
-    const geminiKeysSync = syncData.geminiKeys || [];
-
-    // Use local storage if available, otherwise sync
-    const mergedOpenaiKeys = openaiKeysLocal.length > 0 ? openaiKeysLocal : openaiKeysSync;
-    const mergedGeminiKeys = geminiKeysLocal.length > 0 ? geminiKeysLocal : geminiKeysSync;
-
-    // Migrate to localStorage if we found keys in Chrome storage
-    if (mergedOpenaiKeys.length > 0 || mergedGeminiKeys.length > 0) {
-      console.log('🔄 Content script: One-time migration - Moving API keys from Chrome storage to localStorage...');
-
-      if (mergedOpenaiKeys.length > 0) {
-        await chrome.storage.local.set({ openaiKeys: mergedOpenaiKeys });
-        console.log(`✅ Content script: Migrated ${mergedOpenaiKeys.length} OpenAI keys to Chrome storage`);
-      }
-      if (mergedGeminiKeys.length > 0) {
-        await chrome.storage.local.set({ geminiKeys: mergedGeminiKeys });
-        console.log(`✅ Content script: Migrated ${mergedGeminiKeys.length} Gemini keys to Chrome storage`);
-      }
-
-      console.log('🎉 Content script: One-time migration completed successfully!');
-    }
-
-  } catch (error) {
-    console.error('❌ Content script: One-time migration failed:', error);
-  } finally {
-    // Always reset the migration flag
-    isMigrationRunning = false;
   }
 }
 
-// Load API keys from IndexedDB only (pure IndexedDB system)
+// Load API keys from Chrome storage
 async function loadApiKeysFromStorage() {
   try {
-    // Ensure IndexedDB is initialized
-    if (!isIndexedDBInitialized && !apiKeyStorage.db) {
-      console.log('🔄 Content script: Initializing IndexedDB for loading keys...');
-      await apiKeyStorage.init();
-      isIndexedDBInitialized = true;
-    }
-
-    // Load directly from Chrome storage (only storage system)
+    // Load directly from Chrome storage
     const result = await new Promise((resolve) => {
       chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve);
     });
     
-    const indexedOpenaiKeys = result.openaiKeys || [];
-    const indexedGeminiKeys = result.geminiKeys || [];
+    const openaiKeys = result.openaiKeys || [];
+    const geminiKeys = result.geminiKeys || [];
 
     console.log('✅ Content script loaded API keys from Chrome storage:', {
-      openai: indexedOpenaiKeys.length,
-      gemini: indexedGeminiKeys.length
+      openai: openaiKeys.length,
+      gemini: geminiKeys.length
     });
 
+    // Clean up expired flags
+    cleanupExpiredFlags();
+
     return {
-      openaiKeys: indexedOpenaiKeys,
-      geminiKeys: indexedGeminiKeys
+      openaiKeys: openaiKeys,
+      geminiKeys: geminiKeys
     };
   } catch (error) {
-    console.error('❌ Content script: Error loading API keys from IndexedDB:', error);
+    console.error('❌ Content script: Error loading API keys from Chrome storage:', error);
     return { openaiKeys: [], geminiKeys: [] };
   }
 }
@@ -362,8 +315,7 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
   // Load AI settings
   aiProvider = result.aiProvider || 'openai';
 
-  // Run one-time migration from Chrome storage to localStorage (if needed)
-  await oneTimeMigrationToLocalStorage();
+  // Migration no longer needed - using Chrome storage directly
 
   // Load API keys from background script (which has access to the same localStorage)
   console.log('Content script: Loading API keys from background script...');
@@ -379,6 +331,9 @@ chrome.storage.sync.get(['keywords', 'badgePosition', 'aiProvider', 'selectedOpe
         aiProvider: aiProvider,
         hasValidKeys: (openaiKeys.length > 0 && aiProvider === 'openai') || (geminiKeys.length > 0 && aiProvider === 'gemini')
       });
+
+      // Mark that keys are loaded
+      window.apiKeysLoaded = true;
 
       // Auto-select a key if none is selected but we have valid keys
       if (!selectedOpenaiKey && openaiKeys.length > 0) {
@@ -529,12 +484,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     jobRadarEnabled = request.enabled;
 
     if (jobRadarEnabled) {
-      // Enable Job Radar - ensure badge exists and is visible
+      // Enable Job Radar - ensure badge exists and is visible (only on job sites)
       let existing = document.getElementById('keyword-highlighter-badge');
       if (!existing) {
         existing = createBadge();
       }
-      if (existing) {
+      if (existing && detectJobSite()) {
         existing.style.display = 'block';
       }
     } else {
@@ -559,7 +514,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.log('AI Analysis disabled - stopping job extraction');
     }
   } else if (request.action === 'updateApiKeys') {
-    // Get API keys from background script (which has access to the same IndexedDB)
+    // Get API keys from background script
     console.log('Content script: Received updateApiKeys message, getting keys from background...');
     chrome.runtime.sendMessage({ action: 'getApiKeys' }, (response) => {
       if (response && response.success) {
@@ -767,8 +722,8 @@ function startContinuousJobExtraction() {
 
   let attempts = 0;
   // Adjust interval based on provider to respect rate limits
-  const interval = aiProvider === 'gemini' ? 8000 : 400; // Increased Gemini interval to 8 seconds to prevent rate limiting
-  const maxAttempts = aiProvider === 'gemini' ? 6 : 8; // Reduced attempts for Gemini to prevent overwhelming
+  const interval = aiProvider === 'gemini' ? 4000 : 400; // Reduced Gemini interval to 4 seconds for faster processing
+  const maxAttempts = aiProvider === 'gemini' ? 4 : 6; // Further reduced attempts to prevent rate limiting
 
   // Clear any existing interval to prevent multiple intervals
   if (window.extractionInterval) {
@@ -893,7 +848,11 @@ function startContinuousKeywordMonitoring() {
 function detectJobSite() {
   const url = window.location.href.toLowerCase();
   const hostname = window.location.hostname.toLowerCase();
-  const pageText = document.body.innerText.toLowerCase();
+  
+  // Check both body and head content for job-related indicators
+  const bodyText = document.body ? document.body.innerText || '' : '';
+  const headText = document.head ? document.head.innerText || '' : '';
+  const pageText = (bodyText + ' ' + headText).toLowerCase();
 
   // First, check for obvious non-job sites to avoid false positives
   const nonJobSites = [
@@ -1022,19 +981,47 @@ async function getAvailableApiKey() {
     const availableKeys = keys.filter(key => {
       if (key.status !== 'valid') return false;
       
-      // Check if key is rate limited and if enough time has passed for recovery
-      if (key.usage?.isRateLimited && key.usage?.rateLimitReset) {
-        const resetTime = new Date(key.usage.rateLimitReset).getTime();
-        if (now < resetTime) {
-          return false; // Still in rate limit period
-        } else {
-          // Rate limit period has passed, reset the key
-          key.usage.isRateLimited = false;
-          key.usage.rateLimitAttempts = 0;
-          key.usage.rateLimitReset = null;
-          console.log(`🔄 Key ${key.masked} recovered from rate limit`);
-        }
-      }
+        // Check RPM flag (1 minute recovery)
+  if (key.usage?.rpmLimited && key.usage?.rpmLimitedTime) {
+    const rpmResetTime = key.usage.rpmLimitedTime + 60000; // 1 minute
+    if (now < rpmResetTime) {
+      console.log(`🚫 Key ${key.masked} still RPM limited (${Math.ceil((rpmResetTime - now) / 1000)}s remaining)`);
+      return false;
+    } else {
+      // RPM limit period has passed, remove the flag
+      delete key.usage.rpmLimited;
+      delete key.usage.rpmLimitedTime;
+      console.log(`🔄 Key ${key.masked} recovered from RPM limit`);
+    }
+  }
+  
+  // Check RPD flag (daily recovery - next day)
+  if (key.usage?.rpdLimited && key.usage?.rpdLimitedDate) {
+    const today = new Date().toDateString();
+    if (key.usage.rpdLimitedDate === today) {
+      console.log(`🚫 Key ${key.masked} still RPD limited (until tomorrow)`);
+      return false;
+    } else {
+      // New day has arrived, remove the flag
+      delete key.usage.rpdLimited;
+      delete key.usage.rpdLimitedDate;
+      console.log(`🔄 Key ${key.masked} recovered from RPD limit (new day)`);
+    }
+  }
+  
+  // Legacy rate limit check (for backward compatibility)
+  if (key.usage?.isRateLimited && key.usage?.rateLimitReset) {
+    const resetTime = new Date(key.usage.rateLimitReset).getTime();
+    if (now < resetTime) {
+      return false; // Still in rate limit period
+    } else {
+      // Rate limit period has passed, reset the key
+      key.usage.isRateLimited = false;
+      key.usage.rateLimitAttempts = 0;
+      key.usage.rateLimitReset = null;
+      console.log(`🔄 Key ${key.masked} recovered from legacy rate limit`);
+    }
+  }
       
       // Check daily limits - be more lenient
       const requestsToday = key.usage?.requestsToday || 0;
@@ -1300,7 +1287,7 @@ function hashString(str) {
 
 // URL opening timing control system
 let urlOpeningTracker = {
-  lastUrlOpenTime: 0,
+  lastUrlOpenTime: Date.now(), // Initialize with current time
   urlOpenCount: 0,
   suggestedDelay: 0,
   isTracking: false,
@@ -1516,21 +1503,19 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
       const maxTokens = 250000;
 
       if (key.usage.requestsToday >= maxRequests || key.usage.tokensToday >= maxTokens) {
+        // Set RPD flag (daily recovery - next day)
+        key.usage.rpdLimited = true;
+        key.usage.rpdLimitedDate = new Date().toDateString();
+        console.log(`🚫 Gemini key ${key.masked} reached daily limits and flagged as RPD limited until tomorrow`);
+        
+        // Keep legacy flag for backward compatibility
         key.usage.isRateLimited = true;
         key.usage.rateLimitReset = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        console.log(`🚫 Gemini key ${key.masked} reached daily limits and marked as rate limited`);
       }
     }
 
-    // Save updated usage to IndexedDB
+    // Save updated usage to Chrome storage
     try {
-      // Ensure IndexedDB is initialized
-      if (!isIndexedDBInitialized && !apiKeyStorage.db) {
-        console.log('🔄 Content script: Initializing IndexedDB for saving usage...');
-        await apiKeyStorage.init();
-        isIndexedDBInitialized = true;
-      }
-
       // Save updated keys to Chrome storage
       const storageKey = aiProvider === 'openai' ? 'openaiKeys' : 'geminiKeys';
       await chrome.storage.local.set({ [storageKey]: keys });
@@ -1543,7 +1528,7 @@ async function updateKeyUsage(keyId, tokensUsed = 0) {
         // Ignore errors if popup is not open
       });
     } catch (error) {
-      console.error('Failed to save usage to IndexedDB:', error);
+      console.error('Failed to save usage to Chrome storage:', error);
     }
   }
 }
@@ -1552,11 +1537,63 @@ async function extractJobInfo() {
   console.log('🚀🚀🚀 EXTRACT JOB INFO FUNCTION CALLED 🚀🚀🚀');
   console.log('🚀 extractJobInfo function called');
 
+  // Wait for API keys to be loaded if they haven't been loaded yet
+  if (!window.apiKeysLoaded) {
+    console.log('⏳ Waiting for API keys to be loaded...');
+    let attempts = 0;
+    while (!window.apiKeysLoaded && attempts < 50) { // Wait up to 5 seconds
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    
+    if (!window.apiKeysLoaded) {
+      console.log('❌ API keys not loaded after waiting, trying direct load...');
+      // Try to load API keys directly as fallback
+      try {
+        const result = await new Promise((resolve) => {
+          chrome.storage.local.get(['openaiKeys', 'geminiKeys'], resolve);
+        });
+        openaiKeys = result.openaiKeys || [];
+        geminiKeys = result.geminiKeys || [];
+        window.apiKeysLoaded = true;
+        
+        // Clean up expired flags
+        cleanupExpiredFlags();
+        
+        console.log('✅ Fallback: Loaded API keys directly from storage:', {
+          openai: openaiKeys.length,
+          gemini: geminiKeys.length
+        });
+      } catch (error) {
+        console.error('❌ Fallback API key loading failed:', error);
+      }
+    } else {
+      console.log('✅ API keys loaded, proceeding with job extraction');
+    }
+  }
+  
+  // Reset rate limit flag at start of new extraction
+  window.lastExtractionRateLimited = false;
+
   if (!isJobSite) {
     console.log('❌ Not a job site, returning');
     return;
   }
   console.log('✅ Job site detected');
+
+  // Check if job is expired before proceeding with extraction
+  if (isJobExpired()) {
+    console.log('❌ Job is expired, setting expired status');
+    jobInfo = {
+      position: 'EXPIRED',
+      company: 'Job Expired',
+      industry: 'N/A',
+      jobType: 'expired',
+      isExpired: true
+    };
+    updateBadge();
+    return;
+  }
 
   // Check if AI Analysis is enabled
   if (!aiAnalysisEnabled) {
@@ -1617,22 +1654,28 @@ async function extractJobInfo() {
     console.log(`⏸️ Request in progress, queuing... (${blockedRequests} queued)`);
     
     // Limit queued requests to prevent infinite queuing
-    if (blockedRequests > 5) {
+    if (blockedRequests > 3) {
       console.log(`🚫 Too many queued requests (${blockedRequests}), skipping this request`);
       return;
     }
     
     // Queue the request with a small delay instead of blocking completely
     setTimeout(() => {
-      console.log(`🔄 Retrying queued request...`);
-      extractJobInfo();
-    }, 2000); // 2 second delay for queued requests
+      // Only retry if the previous request failed (not if it succeeded)
+      if (!window.lastRequestSuccessful) {
+        console.log(`🔄 Retrying queued request (previous request failed)...`);
+        extractJobInfo();
+      } else {
+        console.log(`✅ Skipping queued request (previous request succeeded)`);
+      }
+    }, 1000); // 1 second delay for queued requests
     return;
   }
   console.log('✅ No request in progress, proceeding');
 
   // Set request lock
   isRequestInProgress = true;
+  window.lastRequestSuccessful = false; // Initialize success flag
   console.log(`🔒 Starting job extraction attempt ${loadAttempts}/${maxLoadAttempts} at ${new Date().toLocaleTimeString()}`);
   console.log(`🔒 Request lock set, isRequestInProgress: ${isRequestInProgress}`);
 
@@ -1690,7 +1733,7 @@ async function extractJobInfo() {
 
   try {
     console.log('🔍 Collecting job elements...');
-    const jobElements = collectJobElements();
+    const jobElements = await collectJobElements();
     let pageContent = '';
     pageContent = jobElements;
     console.log(`📄 Collected page content: ${pageContent.length} characters`);
@@ -1710,9 +1753,9 @@ async function extractJobInfo() {
 
     console.log('✅ Page content validation passed');
 
-    //  Truncate content to prevent API errors (keep first 50000 characters for GPT-4 Turbo)
-    if (pageContent.length > 50000) {
-      pageContent = pageContent.substring(0, 50000) + '... [Content truncated]';
+    //  Truncate content to prevent API errors (keep first 100000 characters for better analysis)
+    if (pageContent.length > 100000) {
+      pageContent = pageContent.substring(0, 100000) + '... [Content truncated]';
     }
     console.log('Page Content:', pageContent);
 
@@ -1743,6 +1786,7 @@ async function extractJobInfo() {
 "position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
 - PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
 - H1 tags typically contain the main job title (e.g., "Senior Software Engineer")
+- if the H1 tag is not a job title, then look for the job title in the <h2> tags, then <h3> tags, then page titles, then job posting headers
 - Do NOT modify, shorten, or customize the title in any way
 
 "company": The hiring company name (e.g., "Metronome", "Axuall", "Jumpapp.com", "AutoAssist", "Samsara", "Maple", "KeyBank", "Immuta", "Staff4Me"). Look for company names in page titles, headers, logos, "About" sections, or company descriptions. IMPORTANT: Check the page title first - if it contains both job title and company name (e.g., "Senior Software Engineer - Staff4Me"), extract the company name part. Also look for company names in H1, H2, H3 elements and header areas. If company name is not clearly identifiable, use empty string "".
@@ -1825,14 +1869,42 @@ Return the exact phrase found (e.g., "founded in 2015", "since 2020", "establish
 
 Return the exact phrase found (e.g., "startup", "SaaS company", "Fortune 500") or "Not specified" if no company type is mentioned.
 
-"jobSummary": Create a concise 3-5 sentence summary of the job posting that covers:
-1. What the company does (their business/product/service)
-2. What they're building or developing
-3. What they're looking to hire for (role purpose/goals)
-4. Key company highlights or achievements (if mentioned)
-5. Growth plans or future direction (if mentioned)
+"salary": Extract salary information from the job posting. Look for:
+- Salary ranges: "$80,000 - $120,000", "$100k-150k", "80k-120k per year"
+- Hourly rates: "$50/hour", "$75-100 per hour", "hourly rate: $60-80"
+- Annual compensation: "$120,000 annually", "base salary: $90,000"
+- Total compensation: "total comp: $150,000", "TC: $140k"
+- Equity/stock options: "equity: 0.1%", "stock options", "equity package"
+- Benefits that affect compensation: "unlimited PTO", "health insurance", "401k matching"
+- Salary formats: "80-120k", "$80K-$120K", "80,000 to 120,000", "six figures"
 
-Focus on the most important and interesting aspects. Write in clear, engaging sentences that give a complete picture of the opportunity. Avoid repetitive information and keep it informative but concise.
+**IMPORTANT**: 
+- Extract the EXACT text as written (e.g., "$80,000 - $120,000" not "80k-120k")
+- Include currency symbols and formatting as shown
+- If multiple salary ranges are mentioned, include all of them
+- Include both base salary and total compensation if both are mentioned
+- Include equity/stock information if mentioned
+- Return "Not specified" if no salary information is found
+
+"jobSummary": Create a comprehensive 4-6 sentence summary that covers both COMPANY and JOB information:
+
+**COMPANY SECTION (1 sentence):**
+1. What the company does - their core business, products, services, and market focus
+2. Company stage and achievements - startup/scale-up/enterprise status, funding, growth, notable accomplishments
+3. Company culture and values - work environment, mission, team dynamics, remote/hybrid policies
+
+**JOB SECTION (1 sentence):**
+4. What they're looking to hire for - specific role purpose, responsibilities, and goals
+5. What you'll be building/working on - projects, technologies, challenges you'll tackle
+6. Growth opportunities and impact - career development, learning opportunities, company trajectory
+
+**WRITING STYLE:**
+- Write in engaging, professional tone that makes the opportunity sound exciting
+- Include specific details about the company's products, technology, or market position
+- Mention any notable achievements, funding rounds, or growth metrics
+- Highlight what makes this company unique or interesting
+- Focus on the complete picture of both the company and the role
+- Keep it informative but concise, avoiding repetitive information
 "skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
 "matchRate": Calculate an ATS (Applicant Tracking System) match rate percentage (0-100) between the user's resume and this job posting. ATS systems scan for specific keywords and phrases to rank candidates. Focus on:
 
@@ -1883,6 +1955,7 @@ User Location: ${userLocation || 'Not specified'}`
 "position": The EXACT job title/role as written on the page - PRESERVE EVERYTHING including:
 - PRIORITY: Look for job titles in <h1> tags first, then <h2>, <h3> tags, page titles, job posting headers
 - H1 tags typically contain the main job title (e.g., "Senior Software Engineer")
+- if the H1 tag is not a job title, then look for the job title in the <h2> tags, then <h3> tags, then page titles, then job posting headers  
 - Do NOT modify, shorten, or customize the title in any way
 
 "company": The hiring company name (e.g., "Metronome", "Axuall", "Jumpapp.com", "AutoAssist", "Samsara", "Maple", "KeyBank", "Immuta", "Staff4Me"). Look for company names in page titles, headers, logos, "About" sections, or company descriptions. IMPORTANT: Check the page title first - if it contains both job title and company name (e.g., "Senior Software Engineer - Staff4Me"), extract the company name part. Also look for company names in H1, H2, H3 elements and header areas. If company name is not clearly identifiable, use empty string "".
@@ -1965,14 +2038,42 @@ Return the exact phrase found (e.g., "founded in 2015", "since 2020", "establish
 
 Return the exact phrase found (e.g., "startup", "SaaS company", "Fortune 500") or "Not specified" if no company type is mentioned.
 
-"jobSummary": Create a concise 3-5 sentence summary of the job posting that covers:
-1. What the company does (their business/product/service)
-2. What they're building or developing
-3. What they're looking to hire for (role purpose/goals)
-4. Key company highlights or achievements (if mentioned)
-5. Growth plans or future direction (if mentioned)
+"salary": Extract salary information from the job posting. Look for:
+- Salary ranges: "$80,000 - $120,000", "$100k-150k", "80k-120k per year"
+- Hourly rates: "$50/hour", "$75-100 per hour", "hourly rate: $60-80"
+- Annual compensation: "$120,000 annually", "base salary: $90,000"
+- Total compensation: "total comp: $150,000", "TC: $140k"
+- Equity/stock options: "equity: 0.1%", "stock options", "equity package"
+- Benefits that affect compensation: "unlimited PTO", "health insurance", "401k matching"
+- Salary formats: "80-120k", "$80K-$120K", "80,000 to 120,000", "six figures"
 
-Focus on the most important and interesting aspects. Write in clear, engaging sentences that give a complete picture of the opportunity. Avoid repetitive information and keep it informative but concise.
+**IMPORTANT**: 
+- Extract the EXACT text as written (e.g., "$80,000 - $120,000" not "80k-120k")
+- Include currency symbols and formatting as shown
+- If multiple salary ranges are mentioned, include all of them
+- Include both base salary and total compensation if both are mentioned
+- Include equity/stock information if mentioned
+- Return "Not specified" if no salary information is found
+
+"jobSummary": Create a comprehensive 4-6 sentence summary that covers both COMPANY and JOB information:
+
+**COMPANY SECTION (1 sentences):**
+1. What the company does - their core business, products, services, and market focus
+2. Company stage and achievements - startup/scale-up/enterprise status, funding, growth, notable accomplishments
+3. Company culture and values - work environment, mission, team dynamics, remote/hybrid policies
+
+**JOB SECTION (1 sentences):**
+4. What they're looking to hire for - specific role purpose, responsibilities, and goals
+5. What you'll be building/working on - projects, technologies, challenges you'll tackle
+6. Growth opportunities and impact - career development, learning opportunities, company trajectory
+
+**WRITING STYLE:**
+- Write in engaging, professional tone that makes the opportunity sound exciting
+- Include specific details about the company's products, technology, or market position
+- Mention any notable achievements, funding rounds, or growth metrics
+- Highlight what makes this company unique or interesting
+- Focus on the complete picture of both the company and the role
+- Keep it informative but concise, avoiding repetitive information
 "skills": Top 8 required skills or tech stack - Analyze the FULL CONTENT to identify the most important technical skills, programming languages, frameworks, tools, or technologies required for this position. Look for skills mentioned in job requirements, qualifications, "what you'll need" sections, and technical specifications. Return as an array of exactly 8 skills, or fewer if less than 8 are clearly specified. Examples: ["JavaScript", "React", "Node.js", "MongoDB", "AWS"] or ["Python", "Machine Learning", "TensorFlow", "SQL", "Git"]. If no specific skills found, return empty array [].
 "matchRate": Calculate an ATS (Applicant Tracking System) match rate percentage (0-100) between the user's resume and this job posting. ATS systems scan for specific keywords and phrases to rank candidates. Focus on:
 
@@ -2099,10 +2200,12 @@ User Location: ${userLocation || 'Not specified'}`
           };
           loadFailed = false;
           lastLoadError = null;
+          window.lastRequestSuccessful = true; // Mark request as successful
           updateBadge(); // Refresh badge with job info
         } else {
           // No valid job data found
           lastLoadError = 'Incomplete job data from AI';
+          window.lastRequestSuccessful = false; // Mark request as failed
           updateBadge();
         }
       } catch (e) {
@@ -2110,6 +2213,7 @@ User Location: ${userLocation || 'Not specified'}`
         console.log('❌ JSON Parse Error:', e.message);
         console.log('📄 Original content:', content);
         lastLoadError = 'JSON Parse Error: ' + e.message;
+        window.lastRequestSuccessful = false; // Mark request as failed
         updateBadge();
       }
     } else {
@@ -2117,54 +2221,90 @@ User Location: ${userLocation || 'Not specified'}`
       console.log(`❌ API request failed: ${response.status} ${response.statusText}`);
       const errorText = await response.text();
       console.log('Error response:', errorText);
+      window.lastRequestSuccessful = false; // Mark request as failed
 
-      // Handle rate limiting (only for Gemini) - More conservative approach
+      // Handle rate limiting (only for Gemini) - Parse error response for proper limit type
       if (response.status === 429 && aiProvider === 'gemini') {
-        console.log('Gemini rate limit hit, implementing smart retry strategy...');
-        const key = geminiKeys.find(k => k.id === currentKeyId);
-        if (key) {
-          key.usage = key.usage || {};
-          
-          // Don't immediately mark as rate limited - implement retry with backoff
-          if (!key.usage.rateLimitAttempts) {
-            key.usage.rateLimitAttempts = 0;
-          }
-          key.usage.rateLimitAttempts++;
-          
-          // Only mark as rate limited after 3 consecutive 429 errors
-          if (key.usage.rateLimitAttempts >= 3) {
-            key.usage.isRateLimited = true;
-            key.usage.rateLimitReset = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes instead of 1 hour
-            console.log(`🚫 Key ${key.masked} marked as rate limited after ${key.usage.rateLimitAttempts} attempts`);
+        console.log('🚫 Gemini rate limit hit (429), analyzing error response...');
+        
+        let rateLimitType = 'unknown';
+        let retryDelayMs = 60000; // Default 1 minute
+        let quotaInfo = '';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error && errorData.error.details) {
+            // Look for quota information
+            const quotaFailure = errorData.error.details.find(d => d['@type'] === 'type.googleapis.com/google.rpc.QuotaFailure');
+            if (quotaFailure && quotaFailure.violations) {
+              const violation = quotaFailure.violations[0];
+              quotaInfo = `${violation.quotaMetric} (${violation.quotaValue} ${violation.quotaId})`;
+              
+              // Determine if it's daily or per-minute limit
+              if (violation.quotaId.includes('PerDay') || violation.quotaId.includes('FreeTier')) {
+                rateLimitType = 'rpd';
+                console.log(`📊 Detected RPD limit: ${quotaInfo}`);
+              } else if (violation.quotaId.includes('PerMinute')) {
+                rateLimitType = 'rpm';
+                console.log(`📊 Detected RPM limit: ${quotaInfo}`);
+              }
+            }
             
-            // Save updated key status
-            chrome.storage.sync.set({
-              geminiKeys: geminiKeys
-            });
-          } else {
-            console.log(`⚠️ Key ${key.masked} hit rate limit (attempt ${key.usage.rateLimitAttempts}/3), will retry with backoff`);
+            // Look for retry information
+            const retryInfo = errorData.error.details.find(d => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+            if (retryInfo && retryInfo.retryDelay) {
+              retryDelayMs = parseInt(retryInfo.retryDelay.replace('s', '')) * 1000;
+              console.log(`⏱️ API suggests retry after ${retryDelayMs/1000} seconds`);
+            }
           }
-
-          // Clear the cached key so we can select a different one
-          clearPageKeyCache();
-
-          // Force key rotation by clearing the cache
-          clearPageKeyCache();
+        } catch (parseError) {
+          console.log('⚠️ Could not parse error response, using default handling');
+        }
+        
+        // Set appropriate flags based on detected limit type
+        const keys = geminiKeys;
+        const currentKey = keys.find(k => k.id === currentKeyId);
+        if (currentKey) {
+          if (rateLimitType === 'rpd') {
+            // Daily limit - set RPD flag
+            currentKey.usage.rpdLimited = true;
+            currentKey.usage.rpdLimitedDate = new Date().toDateString();
+            console.log(`🚫 Key ${currentKey.masked} flagged as RPD limited until tomorrow (${quotaInfo})`);
+          } else if (rateLimitType === 'rpm') {
+            // Per-minute limit - set RPM flag
+            currentKey.usage.rpmLimited = true;
+            currentKey.usage.rpmLimitedTime = Date.now();
+            console.log(`🚫 Key ${currentKey.masked} flagged as RPM limited for ${retryDelayMs/1000}s (${quotaInfo})`);
+          } else {
+            // Unknown limit type - use retry delay or default
+            currentKey.usage.rpmLimited = true;
+            currentKey.usage.rpmLimitedTime = Date.now() + retryDelayMs;
+            console.log(`🚫 Key ${currentKey.masked} flagged as rate limited for ${retryDelayMs/1000}s (unknown type)`);
+          }
           
-          // Try with another available key
-          const nextKey = await getAvailableApiKey();
-          if (nextKey && nextKey.id !== currentKeyId) {
-            console.log(`Retrying with next available Gemini key: ${nextKey.masked}`);
-            // Add a small delay before retry
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            // Recursive call with new key
-            return await extractJobInfo();
-          } else {
-            console.log('No other available keys found, will retry current key with backoff');
-            // If no other keys, wait and retry with current key
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            return await extractJobInfo();
+          // Save the updated key
+          try {
+            await chrome.storage.local.set({ geminiKeys: keys });
+            console.log(`💾 Rate limit flag saved for key: ${currentKey.masked}`);
+          } catch (error) {
+            console.error('Failed to save rate limit flag:', error);
           }
+        }
+        
+        // Clear the cached key so we can select a different one
+        clearPageKeyCache();
+        
+        // Try with another available key immediately
+        const nextKey = await getAvailableApiKey();
+        if (nextKey && nextKey.id !== currentKeyId) {
+          console.log(`🔄 Retrying with next available Gemini key: ${nextKey.masked}`);
+          // Add a small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Recursive call with new key
+          return await extractJobInfo();
+        } else {
+          console.log('❌ No other available keys found, stopping retry');
+          throw new Error('All Gemini keys are rate limited');
         }
       }
 
@@ -2287,10 +2427,10 @@ function initializeHighlighter() {
       // Initial highlight for existing content (runs regardless of toggle)
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-          setTimeout(highlightKeywords, 1000);
+          highlightKeywords();
         });
       } else {
-        setTimeout(highlightKeywords, 1000);
+        highlightKeywords();
       }
 
       // Start continuous keyword monitoring regardless of toggle
@@ -2305,7 +2445,7 @@ function initializeHighlighter() {
     }
 
     // Test keyword detection
-    setTimeout(testKeywordDetection, 2000);
+    testKeywordDetection();
 
     // Set up MutationObserver for dynamic content
     observer = new MutationObserver((mutations) => {
@@ -2323,7 +2463,7 @@ function initializeHighlighter() {
 
       if (shouldHighlight && !isProcessing) {
         clearTimeout(window.highlightTimeout);
-        window.highlightTimeout = setTimeout(highlightKeywords, 1000);
+        highlightKeywords();
       }
     });
 
@@ -2413,8 +2553,10 @@ function escapeRegExp(string) {
 
 // Copy job information to clipboard in tab-separated format
 function copyJobToClipboard() {
+  console.log('🔄 Copy button clicked, jobInfo:', jobInfo);
 
   if (!jobInfo) {
+    console.error('❌ No job info available for copying');
     showCopyError('No job info available');
     return;
   }
@@ -2428,13 +2570,23 @@ function copyJobToClipboard() {
     const cleanPosition = jobInfo.position.replace(/[\t\n\r]/g, ' ').trim();
     const cleanIndustry = jobInfo.industry.replace(/[\t\n\r]/g, ' ').trim();
 
-    // Load copy preferences (defaults: includeIndustry=false, includeCompanySize=false, includeFoundedDate=false, includeTechStack=false, includeMatchRate=false)
-    chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate'], (prefs) => {
+    // Load copy preferences (defaults: includeIndustry=false, includeCompanySize=false, includeFoundedDate=false, includeTechStack=false, includeMatchRate=false, includeSalary=false)
+    chrome.storage.sync.get(['copyIncludeIndustry', 'copyIncludeCompanySize', 'copyIncludeFoundedDate', 'copyIncludeTechStack', 'copyIncludeMatchRate', 'copyIncludeSalary'], (prefs) => {
       const includeIndustry = prefs.copyIncludeIndustry === true;
       const includeCompanySize = prefs.copyIncludeCompanySize === true;
       const includeFoundedDate = prefs.copyIncludeFoundedDate === true;
       const includeTechStack = prefs.copyIncludeTechStack === true;
       const includeMatchRate = prefs.copyIncludeMatchRate === true;
+      const includeSalary = prefs.copyIncludeSalary === true;
+
+      console.log('🔧 Copy preferences loaded:', {
+        includeIndustry,
+        includeCompanySize,
+        includeFoundedDate,
+        includeTechStack,
+        includeMatchRate,
+        includeSalary
+      });
 
       // Build tab-separated fields
       const fields = [cleanCompany, cleanPosition, jobUrl];
@@ -2456,19 +2608,27 @@ function copyJobToClipboard() {
       if (includeMatchRate) {
         fields.push(String(jobInfo.matchRate || ''));
       }
+      if (includeSalary) {
+        const cleanSalary = jobInfo.salary ? jobInfo.salary.replace(/[\t\n\r]/g, ' ').trim() : '';
+        fields.push(cleanSalary);
+      }
 
       const copyText = fields.join('\t');
 
 
       // Try modern clipboard API first
+      console.log('🔄 Attempting to copy text:', copyText);
       if (navigator.clipboard && navigator.clipboard.writeText) {
+        console.log('✅ Using modern clipboard API');
         navigator.clipboard.writeText(copyText).then(() => {
+          console.log('✅ Successfully copied to clipboard');
           showCopySuccess();
         }).catch(err => {
-          console.error('Modern clipboard API failed:', err);
+          console.error('❌ Modern clipboard API failed:', err);
           useFallbackCopy(copyText);
         });
       } else {
+        console.log('⚠️ Modern clipboard API not available, using fallback');
         useFallbackCopy(copyText);
       }
     });
@@ -2478,8 +2638,599 @@ function copyJobToClipboard() {
   }
 }
 
+// ---- Job Expiration Detection ----
+function isJobExpired() {
+  try {
+    // Check both body and head content for expiration indicators
+    const bodyText = document.body ? document.body.innerText || '' : '';
+    const bodyHtml = document.body ? document.body.innerHTML || '' : '';
+    const headText = document.head ? document.head.innerText || '' : '';
+    const headHtml = document.head ? document.head.innerHTML || '' : '';
+    
+    // Combine all text content for comprehensive checking
+    const pageText = bodyText + ' ' + headText;
+    const pageHtml = bodyHtml + ' ' + headHtml;
+    const lowerText = pageText.toLowerCase();
+    
+    // Common job expiration patterns
+    const expiredPatterns = [
+      'we are no longer accepting applicants for this position',
+      'we couldn\'t find this job',
+      'job is ooo',
+      'job not found',
+      'job expired',
+      'workday is currently unavailable',
+      'the page you\'re looking for doesn\'t exist',
+      'we\'re sorry. this job is now inactive',
+      'the page you are looking for doesn\'t exist',
+      'the job you are looking for is no longer open',
+      'this job is no longer available',
+      'this position is no longer available',
+      'position has been filled',
+      'this job posting is no longer available',
+      'job posting has expired',
+      'this position has been closed',
+      'we are no longer accepting applications',
+      'applications are no longer being accepted',
+      'this job has been removed',
+      'position no longer available',
+      'job posting removed',
+      'this listing is no longer active',
+      'this job listing has expired',
+      'position filled',
+      'job closed',
+      'no longer hiring for this position',
+      'this role has been filled',
+      'position is no longer open',
+      'job posting closed',
+      'this opportunity is no longer available',
+      'we have filled this position',
+      'this job has been closed',
+      'position is no longer accepting applications',
+      'this job listing is no longer active',
+      'job posting is no longer available',
+      'this position has been filled',
+      'we are no longer accepting applications for this role',
+      'this job posting has been removed',
+      'position is no longer open for applications',
+      'this job opportunity has expired',
+      'job posting has been closed',
+      'this position is no longer accepting candidates',
+      'we have closed this position',
+      'this job listing has been removed',
+      'position is no longer available for application',
+      'this job posting is no longer active',
+      'we are no longer hiring for this role',
+      'this position has been closed for applications',
+      'job posting no longer accepting applications',
+      'this job opportunity is no longer available',
+      'position has been filled and is no longer accepting applications',
+      'this job listing is closed',
+      'job posting is closed',
+      'this position is closed',
+      'job is closed',
+      'position closed',
+      'job posting expired',
+      'this job has expired',
+      'job listing expired',
+      'position expired',
+      'this position has expired',
+      'job posting is expired',
+      'this job listing has expired',
+      'position is expired',
+      'job is expired',
+      'this job posting expired',
+      'job opportunity expired',
+      'this job opportunity has expired',
+      'position opportunity expired',
+      'this position opportunity has expired',
+      'job posting opportunity expired',
+      'this job posting opportunity has expired',
+      'job listing opportunity expired',
+      'this job listing opportunity has expired',
+      'position listing expired',
+      'this position listing has expired',
+      'job posting listing expired',
+      'this job posting listing has expired',
+      'job opportunity listing expired',
+      'this job opportunity listing has expired',
+      'position opportunity listing expired',
+      'this position opportunity listing has expired'
+    ];
+    
+    // Check for expired patterns
+    for (const pattern of expiredPatterns) {
+      if (lowerText.includes(pattern)) {
+        console.log(`🔍 Job expired detected: "${pattern}"`);
+        return true;
+      }
+    }
+    
+    // Check for specific HTML patterns that might indicate expiration
+    const expiredHtmlPatterns = [
+      'class="expired"',
+      'class="job-expired"',
+      'class="position-closed"',
+      'class="job-closed"',
+      'class="no-longer-available"',
+      'class="position-filled"',
+      'class="job-filled"',
+      'id="expired"',
+      'id="job-expired"',
+      'id="position-closed"',
+      'id="job-closed"',
+      'data-status="expired"',
+      'data-status="closed"',
+      'data-status="filled"',
+      'data-expired="true"',
+      'data-closed="true"',
+      'data-filled="true"'
+    ];
+    
+    for (const pattern of expiredHtmlPatterns) {
+      if (pageHtml.toLowerCase().includes(pattern)) {
+        console.log(`🔍 Job expired detected (HTML): "${pattern}"`);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking job expiration:', error);
+    return false;
+  }
+}
+
+// ---- Auto-check integration: provide job info on demand ----
+// Tries to ensure jobInfo is available, waiting briefly if needed
+async function isJobRelatedContent() {
+  try {
+    // Check both body and head content for job-related indicators
+    const bodyText = document.body ? document.body.innerText || '' : '';
+    const bodyHtml = document.body ? document.body.innerHTML || '' : '';
+    const headText = document.head ? document.head.innerText || '' : '';
+    const headHtml = document.head ? document.head.innerHTML || '' : '';
+    
+    const pageText = bodyText + ' ' + headText;
+    const pageHtml = bodyHtml + ' ' + headHtml;
+    
+    // If page is too short, likely not a job posting
+    if (pageText.length < 200) {
+      console.log(`🔍 Content too short (${pageText.length} chars), likely not job content`);
+      return false;
+    }
+    
+    // Check for obvious non-job indicators (more specific to avoid false positives)
+    const nonJobIndicators = [
+      'verifying you are human', 'security check', 'please wait',
+      'access denied', 'blocked', 'challenge', 'captcha', 'ddos protection',
+      'error 404', 'page not found', 'maintenance', 'coming soon',
+      'this job posting is no longer available', 'position has been filled',
+      'login required', 'sign in required', 'register to view',
+      'checkout', 'cart', 'shopping', 'product', 'price', 'buy now',
+      'news', 'blog', 'article', 'post', 'comment', 'share', 'like',
+      'contact us', 'about us', 'privacy policy', 'terms of service',
+      'cookie policy', 'disclaimer', 'legal', 'copyright'
+    ];
+    
+    const lowerText = pageText.toLowerCase();
+    for (const indicator of nonJobIndicators) {
+      if (lowerText.includes(indicator)) {
+        console.log(`🔍 Found non-job indicator: "${indicator}"`);
+        return false;
+      }
+    }
+    
+    // Use AI to analyze content if we have API keys
+    if (aiAnalysisEnabled && (openaiKeys.length > 0 || geminiKeys.length > 0)) {
+      return await analyzeContentWithAI(pageText);
+    }
+    
+    // Fallback: basic keyword analysis
+    const jobKeywords = ['job', 'position', 'role', 'career', 'employment', 'hiring', 'apply', 'salary', 'benefits', 'requirements'];
+    const jobScore = jobKeywords.reduce((score, keyword) => {
+      return score + (lowerText.match(new RegExp(keyword, 'g')) || []).length;
+    }, 0);
+    
+    console.log(`🔍 Basic job score: ${jobScore}`);
+    return jobScore >= 3;
+    
+  } catch (error) {
+    console.error('Error analyzing content:', error);
+    return true; // Default to true if analysis fails
+  }
+}
+
+async function analyzeContentWithAI(pageText) {
+  try {
+    const prompt = `Analyze this web page content and determine if it's a job posting. Look for:
+1. Job title/position
+2. Company information
+3. Job description
+4. Requirements/qualifications
+5. Application instructions
+
+Content: ${pageText.substring(0, 2000)}...
+
+Respond with only "YES" if this is a job posting, or "NO" if it's not (like login pages, error pages, security challenges, etc.).`;
+
+    let response;
+    if (aiProvider === 'openai' && openaiKeys.length > 0) {
+      response = await callOpenAI(prompt);
+    } else if (aiProvider === 'gemini' && geminiKeys.length > 0) {
+      response = await callGemini(prompt);
+    } else {
+      return true; // Fallback to true if no AI available
+    }
+    
+    const isJobContent = response && response.trim().toUpperCase().includes('YES');
+    console.log(`🤖 AI content analysis: ${isJobContent ? 'Job content detected' : 'Not job content'}`);
+    return isJobContent;
+    
+  } catch (error) {
+    console.error('AI content analysis failed:', error);
+    return true; // Default to true if AI analysis fails
+  }
+}
+
+async function callOpenAI(prompt) {
+  const key = selectedOpenaiKey || openaiKeys.find(k => k.status === 'valid');
+  if (!key) throw new Error('No valid OpenAI key available');
+  
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key.key}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 50,
+      temperature: 0.1
+    })
+  });
+  
+  if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+async function callGemini(prompt) {
+  const key = selectedGeminiKey || geminiKeys.find(k => k.status === 'valid');
+  if (!key) throw new Error('No valid Gemini key available');
+  
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key.key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 50,
+        temperature: 0.1
+      }
+    })
+  });
+  
+  if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function ensureJobInfoReady(maxWaitMs = 10000) {
+  const start = Date.now();
+  let retryCount = 0;
+  const maxRetries = 1;
+  
+  // If an extraction function exists, try calling it once
+  try {
+    if (typeof extractJobInfo === 'function') {
+      await extractJobInfo();
+    }
+  } catch (_) {}
+  
+  while (typeof jobInfo === 'undefined' || !jobInfo || !jobInfo.position) {
+    if (Date.now() - start > maxWaitMs) break;
+    
+    // Check if content is job-related using AI
+    const isJobContent = await isJobRelatedContent();
+    
+    if (!isJobContent && retryCount < maxRetries) {
+      console.log(`⏳ Content doesn't appear job-related, waiting for page to load (attempt ${retryCount + 1}/${maxRetries})`);
+      retryCount++;
+      
+      // Wait longer for page to load
+      await new Promise(r => setTimeout(r, 1000));
+      
+      // Try extraction again
+      try {
+        if (typeof extractJobInfo === 'function') {
+          await extractJobInfo();
+        }
+      } catch (_) {}
+      
+      continue;
+    }
+    
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      if (typeof extractJobInfo === 'function') {
+        await extractJobInfo();
+      }
+    } catch (_) {}
+  }
+  
+  return jobInfo || null;
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.action === 'requestJobInfo') {
+    (async () => {
+      try {
+        const info = await ensureJobInfoReady(message.timeoutMs || 12000);
+        // Check if the last extraction attempt hit a rate limit
+        const rateLimited = window.lastExtractionRateLimited || false;
+        sendResponse({ ok: !!info, jobInfo: info || {}, rateLimited });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e) });
+      }
+    })();
+    return true;
+  }
+  
+  if (message && message.action === 'assignApiKey') {
+    // Store the assigned key for this tab
+    if (message.provider === 'openai') {
+      selectedOpenaiKey = { id: message.keyId, masked: message.keyMasked };
+      console.log(`🔑 Content script: Assigned OpenAI key ${message.keyMasked} for auto-check`);
+    } else if (message.provider === 'gemini') {
+      selectedGeminiKey = { id: message.keyId, masked: message.keyMasked };
+      console.log(`🔑 Content script: Assigned Gemini key ${message.keyMasked} for auto-check`);
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+  
+  if (message && message.action === 'bypassSecurityChallenge') {
+    (async () => {
+      try {
+        console.log(`🛡️ Content script: Attempting to bypass security challenge`);
+        
+        // Look for common security challenge elements (including hidden/encrypted ones)
+        const selectors = [
+          'input[type="checkbox"]',
+          'input[type="checkbox"][name*="verify"]',
+          'input[type="checkbox"][name*="human"]',
+          'input[type="checkbox"][name*="challenge"]',
+          'input[type="checkbox"][id*="verify"]',
+          'input[type="checkbox"][id*="human"]',
+          'input[type="checkbox"][id*="challenge"]',
+          'input[type="checkbox"][class*="verify"]',
+          'input[type="checkbox"][class*="human"]',
+          'input[type="checkbox"][class*="challenge"]',
+          'button[type="submit"]',
+          'button[type="button"]',
+          'input[type="submit"]',
+          '.cf-turnstile',
+          '#cf-turnstile',
+          '[data-cf-turnstile]',
+          // Hidden/encrypted elements that might become visible on focus
+          'input[style*="display: none"]',
+          'input[style*="visibility: hidden"]',
+          'input[hidden]',
+          'input[type="checkbox"][style*="opacity: 0"]'
+        ];
+        
+        let bypassed = false;
+        
+        // Method 1: Try to find and click visible checkboxes first
+        console.log(`🔍 Looking for visible security challenge elements...`);
+        for (const selector of selectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const element of elements) {
+            if (element.offsetParent !== null && !element.disabled) { // Element is visible and enabled
+              console.log(`🔍 Found visible bypass element:`, element);
+              
+              // Focus the element first (without stealing system focus)
+              element.focus();
+              await new Promise(r => setTimeout(r, 100));
+              
+              // Click the element
+              element.click();
+              console.log(`✅ Clicked visible element:`, element);
+              bypassed = true;
+              
+              // Wait a bit for any animations or redirects
+              await new Promise(r => setTimeout(r, 1000));
+              break;
+            }
+          }
+          if (bypassed) break;
+        }
+        
+        // Method 2: If no visible elements found, try focus navigation to find hidden/encrypted checkboxes
+        if (!bypassed) {
+          console.log(`🔄 No visible elements found, trying focus navigation for hidden checkboxes...`);
+          
+          // Get all potential focusable elements
+          const allElements = document.querySelectorAll('input, button, [tabindex], [onclick]');
+          let currentFocusIndex = 0;
+          
+          // Try cycling through focusable elements to find hidden checkboxes
+          for (let i = 0; i < Math.min(allElements.length, 20); i++) {
+            const element = allElements[i];
+            
+            try {
+              // Focus the element programmatically (doesn't steal system focus)
+              element.focus();
+              await new Promise(r => setTimeout(r, 200));
+              
+              // Check if this is a checkbox that became visible/clickable
+              if (element.type === 'checkbox' && !element.disabled) {
+                console.log(`🔍 Found hidden checkbox via focus navigation:`, element);
+                
+                // Try to click it
+                element.click();
+                console.log(`✅ Clicked hidden checkbox:`, element);
+                bypassed = true;
+                
+                // Wait for potential page changes
+                await new Promise(r => setTimeout(r, 1000));
+                break;
+              }
+              
+              // Also try pressing Space on any focused element (in case it's a hidden checkbox)
+              if (element.tagName === 'INPUT' || element.tagName === 'BUTTON') {
+                console.log(`🔄 Trying Space key on focused element:`, element);
+                element.dispatchEvent(new KeyboardEvent('keydown', { 
+                  key: ' ', 
+                  keyCode: 32, 
+                  bubbles: true,
+                  cancelable: true
+                }));
+                element.dispatchEvent(new KeyboardEvent('keyup', { 
+                  key: ' ', 
+                  keyCode: 32, 
+                  bubbles: true,
+                  cancelable: true
+                }));
+                
+                await new Promise(r => setTimeout(r, 500));
+                
+                // Check if something happened (page changed, element became visible, etc.)
+                const currentUrl = window.location.href.toLowerCase();
+                const currentTitle = document.title.toLowerCase();
+                if (!currentUrl.includes('cloudflare') && !currentTitle.includes('verifying')) {
+                  console.log(`✅ Space key worked, page changed`);
+                  bypassed = true;
+                  break;
+                }
+              }
+              
+            } catch (error) {
+              console.log(`⚠️ Error focusing element:`, error);
+              continue;
+            }
+          }
+        }
+        
+        // Method 3: Try Tab key navigation to cycle through focusable elements
+        if (!bypassed) {
+          console.log(`🔄 Trying Tab key navigation to find hidden elements...`);
+          
+          // Press Tab multiple times to cycle through focusable elements
+          for (let i = 0; i < 15; i++) {
+            // Press Tab
+            document.dispatchEvent(new KeyboardEvent('keydown', { 
+              key: 'Tab', 
+              keyCode: 9, 
+              bubbles: true,
+              cancelable: true
+            }));
+            document.dispatchEvent(new KeyboardEvent('keyup', { 
+              key: 'Tab', 
+              keyCode: 9, 
+              bubbles: true,
+              cancelable: true
+            }));
+            
+            await new Promise(r => setTimeout(r, 300));
+            
+            // Check if current focused element is a checkbox
+            const focusedElement = document.activeElement;
+            if (focusedElement && focusedElement.type === 'checkbox' && !focusedElement.disabled) {
+              console.log(`✅ Found checkbox via Tab navigation:`, focusedElement);
+              
+              // Click the focused checkbox
+              focusedElement.click();
+              console.log(`✅ Clicked checkbox via Tab navigation`);
+              bypassed = true;
+              
+              await new Promise(r => setTimeout(r, 1000));
+              break;
+            }
+            
+            // Also try Space key on current focused element
+            if (focusedElement && (focusedElement.tagName === 'INPUT' || focusedElement.tagName === 'BUTTON')) {
+              console.log(`🔄 Trying Space on Tab-navigated element:`, focusedElement);
+              focusedElement.dispatchEvent(new KeyboardEvent('keydown', { 
+                key: ' ', 
+                keyCode: 32, 
+                bubbles: true,
+                cancelable: true
+              }));
+              focusedElement.dispatchEvent(new KeyboardEvent('keyup', { 
+                key: ' ', 
+                keyCode: 32, 
+                bubbles: true,
+                cancelable: true
+              }));
+              
+              await new Promise(r => setTimeout(r, 500));
+              
+              // Check if page changed
+              const currentUrl = window.location.href.toLowerCase();
+              const currentTitle = document.title.toLowerCase();
+              if (!currentUrl.includes('cloudflare') && !currentTitle.includes('verifying')) {
+                console.log(`✅ Space key on Tab element worked`);
+                bypassed = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Method 4: Try Enter key as final fallback
+        if (!bypassed) {
+          console.log(`🔄 Trying Enter key as final fallback...`);
+          document.dispatchEvent(new KeyboardEvent('keydown', { 
+            key: 'Enter', 
+            keyCode: 13, 
+            bubbles: true,
+            cancelable: true
+          }));
+          document.dispatchEvent(new KeyboardEvent('keyup', { 
+            key: 'Enter', 
+            keyCode: 13, 
+            bubbles: true,
+            cancelable: true
+          }));
+          
+          bypassed = true;
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        
+        // Wait for potential redirect or page change
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Check if we're still on a security challenge page
+        const currentUrl = window.location.href.toLowerCase();
+        const currentTitle = document.title.toLowerCase();
+        const stillChallenged = currentUrl.includes('cloudflare') || 
+                               currentUrl.includes('challenge') ||
+                               currentTitle.includes('verifying') ||
+                               currentTitle.includes('security check');
+        
+        if (stillChallenged) {
+          console.log(`❌ Still on security challenge page after bypass attempt`);
+          sendResponse({ success: false, error: 'Still on security challenge page' });
+        } else {
+          console.log(`✅ Successfully bypassed security challenge`);
+          sendResponse({ success: true });
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error during security challenge bypass:`, error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+});
+
 // Fallback copy method for older browsers
 function useFallbackCopy(copyText) {
+  console.log('🔄 Using fallback copy method');
   try {
     const textArea = document.createElement('textarea');
     textArea.value = copyText;
@@ -2495,19 +3246,21 @@ function useFallbackCopy(copyText) {
     document.body.removeChild(textArea);
 
     if (success) {
+      console.log('✅ Fallback copy method succeeded');
       showCopySuccess();
     } else {
-      console.error('Fallback copy method failed');
+      console.error('❌ Fallback copy method failed');
       showCopyError('Copy failed');
     }
   } catch (fallbackError) {
-    console.error('Fallback copy error:', fallbackError);
+    console.error('❌ Fallback copy error:', fallbackError);
     showCopyError('Copy failed');
   }
 }
 
 // Show copy success feedback
 function showCopySuccess() {
+  console.log('✅ Showing copy success feedback');
   const button = document.querySelector('.copy-job-btn');
   if (button) {
     const originalText = button.innerHTML;
@@ -2519,11 +3272,14 @@ function showCopySuccess() {
       button.innerHTML = originalText;
       button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
     }, 2000);
+  } else {
+    console.warn('⚠️ Copy button not found for success feedback');
   }
 }
 
 // Show copy error feedback
 function showCopyError(message) {
+  console.log('❌ Showing copy error feedback:', message);
   const button = document.querySelector('.copy-job-btn');
   if (button) {
     const originalText = button.innerHTML;
@@ -2535,6 +3291,8 @@ function showCopyError(message) {
       button.innerHTML = originalText;
       button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
     }, 2000);
+  } else {
+    console.warn('⚠️ Copy button not found for error feedback');
   }
 }
 
@@ -2596,7 +3354,7 @@ async function generateCoverLetter() {
 
   try {
     // Get the full page content
-    const pageContent = collectJobElements();
+    const pageContent = await collectJobElements();
 
     // Prepare the AI request
     const messages = [
@@ -2688,6 +3446,78 @@ Return only the cover letter text without any formatting or additional text.`
 
     } else {
       const errorText = await response.text();
+      
+      // Handle rate limiting (only for Gemini) - Parse error response for proper limit type
+      if (response.status === 429 && aiProvider === 'gemini') {
+        console.log('🚫 Gemini rate limit hit (429) in cover letter generation, analyzing error response...');
+        
+        let rateLimitType = 'unknown';
+        let retryDelayMs = 60000; // Default 1 minute
+        let quotaInfo = '';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error && errorData.error.details) {
+            // Look for quota information
+            const quotaFailure = errorData.error.details.find(d => d['@type'] === 'type.googleapis.com/google.rpc.QuotaFailure');
+            if (quotaFailure && quotaFailure.violations) {
+              const violation = quotaFailure.violations[0];
+              quotaInfo = `${violation.quotaMetric} (${violation.quotaValue} ${violation.quotaId})`;
+              
+              // Determine if it's daily or per-minute limit
+              if (violation.quotaId.includes('PerDay') || violation.quotaId.includes('FreeTier')) {
+                rateLimitType = 'rpd';
+                console.log(`📊 Detected RPD limit: ${quotaInfo}`);
+              } else if (violation.quotaId.includes('PerMinute')) {
+                rateLimitType = 'rpm';
+                console.log(`📊 Detected RPM limit: ${quotaInfo}`);
+              }
+            }
+            
+            // Look for retry information
+            const retryInfo = errorData.error.details.find(d => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+            if (retryInfo && retryInfo.retryDelay) {
+              retryDelayMs = parseInt(retryInfo.retryDelay.replace('s', '')) * 1000;
+              console.log(`⏱️ API suggests retry after ${retryDelayMs/1000} seconds`);
+            }
+          }
+        } catch (parseError) {
+          console.log('⚠️ Could not parse error response, using default handling');
+        }
+        
+        // Set appropriate flags based on detected limit type
+        const keys = geminiKeys;
+        const currentKey = keys.find(k => k.id === currentKeyId);
+        if (currentKey) {
+          if (rateLimitType === 'rpd') {
+            // Daily limit - set RPD flag
+            currentKey.usage.rpdLimited = true;
+            currentKey.usage.rpdLimitedDate = new Date().toDateString();
+            console.log(`🚫 Key ${currentKey.masked} flagged as RPD limited until tomorrow (${quotaInfo})`);
+          } else if (rateLimitType === 'rpm') {
+            // Per-minute limit - set RPM flag
+            currentKey.usage.rpmLimited = true;
+            currentKey.usage.rpmLimitedTime = Date.now();
+            console.log(`🚫 Key ${currentKey.masked} flagged as RPM limited for ${retryDelayMs/1000}s (${quotaInfo})`);
+          } else {
+            // Unknown limit type - use retry delay or default
+            currentKey.usage.rpmLimited = true;
+            currentKey.usage.rpmLimitedTime = Date.now() + retryDelayMs;
+            console.log(`🚫 Key ${currentKey.masked} flagged as rate limited for ${retryDelayMs/1000}s (unknown type)`);
+          }
+          
+          // Save the updated key
+          try {
+            await chrome.storage.local.set({ geminiKeys: keys });
+            console.log(`💾 Rate limit flag saved for key: ${currentKey.masked}`);
+          } catch (error) {
+            console.error('Failed to save rate limit flag:', error);
+          }
+        }
+        
+        throw new Error('Rate limit exceeded. Please try again in a minute.');
+      }
+      
       throw new Error(`API Error: ${response.status} - ${errorText}`);
     }
 
@@ -2904,6 +3734,12 @@ function createBadge() {
     return null; // Don't create badge if Job Radar is disabled
   }
 
+  // Don't show badge on non-job sites
+  if (!detectJobSite()) {
+    console.log('🚫 Not a job site, hiding badge');
+    return null;
+  }
+
   let badge = document.getElementById('keyword-highlighter-badge');
   if (badge) {
     return badge; // Badge already exists
@@ -3019,12 +3855,21 @@ function createBadge() {
 
 // Update the badge display with accurate counts (excluding badge content)
 function updateBadge() {
+  // Don't show badge on non-job sites
+  if (!detectJobSite()) {
+    const existingBadge = document.getElementById('keyword-highlighter-badge');
+    if (existingBadge) {
+      existingBadge.style.display = 'none';
+    }
+    return;
+  }
+
   let badge = document.getElementById('keyword-highlighter-badge');
 
   if (!badge) {
     badge = createBadge();
     if (!badge) {
-      return; // Job Radar is disabled
+      return; // Job Radar is disabled or not a job site
     }
   }
 
@@ -3092,23 +3937,44 @@ function updateBadge() {
   } else {
     // Add job information if available
     if (jobInfo) {
-      // Check location compatibility
-      let locationAlert = '';
-      if (userLocation && jobInfo.jobType !== 'Remote') {
-        locationAlert = `
-          <div class="location-alert" style="
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-            border-radius: 6px;
-            padding: 8px;
-            margin-bottom: 8px;
-            font-size: 11px;
-            color: #92400e;
-          ">
-            ⚠️ Location Alert: This job requires location presence. You're looking for fully remote roles.
+      // Check if job is expired
+      if (jobInfo.isExpired) {
+        content += `
+          <div class="job-info expired-ui">
+            <div class="job-info-title" style="color: #dc2626;">❌ Job Expired</div>
+            <div style="
+              background: #fef2f2;
+              border: 1px solid #fca5a5;
+              border-radius: 6px;
+              padding: 12px;
+              margin-bottom: 8px;
+              font-size: 12px;
+              color: #991b1b;
+              text-align: center;
+            ">
+              This job posting is no longer available.<br>
+              The position may have been filled or removed.
+            </div>
           </div>
         `;
-      }
+      } else {
+        // Check location compatibility
+        let locationAlert = '';
+        if (userLocation && jobInfo.jobType !== 'Remote') {
+          locationAlert = `
+            <div class="location-alert" style="
+              background: #fef3c7;
+              border: 1px solid #f59e0b;
+              border-radius: 6px;
+              padding: 8px;
+              margin-bottom: 8px;
+              font-size: 11px;
+              color: #92400e;
+            ">
+              ⚠️ Location Alert: This job requires location presence. You're looking for fully remote roles.
+            </div>
+          `;
+        }
 
       // Match rate display
       let matchRateDisplay = '';
@@ -3140,7 +4006,8 @@ function updateBadge() {
           Industry: <span style="color: #7c3aed; font-weight: 600;">${escapeHtml(jobInfo.industry || 'Not specified')}</span><br>
           ${jobInfo.companyType && jobInfo.companyType !== 'Not specified' ? `Company Type: <span style="color: #dc2626; font-weight: 600;">${escapeHtml(jobInfo.companyType)}</span><br>` : ''}
           ${((jobInfo.companySize && jobInfo.companySize !== 'Unknown') || (jobInfo.teamSize && jobInfo.teamSize !== 'Not specified')) ? `Size & Team: <span style="color: ${getCompanySizeColor(jobInfo.companySize)}; font-weight: 600;">${escapeHtml(jobInfo.companySize || '')}${jobInfo.teamSize && jobInfo.teamSize !== 'Not specified' ? ` (${escapeHtml(jobInfo.teamSize)})` : ''}</span><br>` : ''}
-          ${jobInfo.foundedDate && jobInfo.foundedDate !== 'Not specified' ? `Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate)}</span>` : ''}
+          ${jobInfo.foundedDate && jobInfo.foundedDate !== 'Not specified' ? `Founded: <span style="color: #7c2d12; font-weight: 600;">${escapeHtml(jobInfo.foundedDate)}</span><br>` : ''}
+          ${jobInfo.salary && jobInfo.salary !== 'Not specified' ? `💰 Salary: <span style="color: #059669; font-weight: 600;">${escapeHtml(jobInfo.salary)}</span><br>` : ''}
           ${jobInfo.jobSummary ? `
             <div class="job-summary-section" style="margin-top: 12px; padding: 10px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6;">
               <div class="job-summary-title" style="font-weight: 600; color: #1e40af; margin-bottom: 6px; font-size: 13px;">📋 Job Summary:</div>
@@ -3187,6 +4054,7 @@ function updateBadge() {
               </div>
             </div>
         `;
+      } // End of regular job info display
     } else {
       // Show enhanced loading UI when job info is not available, but only if AI analysis is enabled and we have valid API keys
       if (aiAnalysisEnabled && hasValidApiKey) {
@@ -3306,8 +4174,8 @@ function updateBadge() {
       const reopenBtn = badge.querySelector('.reopen-btn');
       if (reopenBtn) {
         reopenBtn.addEventListener('click', () => {
-          // Show the badge
-          if (badge) {
+          // Show the badge only if it's a job site
+          if (badge && detectJobSite()) {
             badge.style.display = 'block';
           }
 
@@ -4196,24 +5064,40 @@ window.addEventListener('beforeunload', () => {
 
 // Collect job information by flexible element detection
 function collectJobElements() {
-  // Temporarily hide the badge to exclude it from content collection
-  const badge = document.getElementById('keyword-highlighter-badge');
-  let badgeWasHidden = false;
+  // Wait a bit for dynamic content to load
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Temporarily hide the badge to exclude it from content collection
+      const badge = document.getElementById('keyword-highlighter-badge');
+      let badgeWasHidden = false;
 
-  if (badge) {
-    badgeWasHidden = badge.style.display === 'none';
-    badge.style.display = 'none';
-  }
+      if (badge) {
+        badgeWasHidden = badge.style.display === 'none';
+        badge.style.display = 'none';
+      }
 
-  // Get the body content without the badge
-  const content = cleanHtmlContent(document.body.outerHTML);
+      // Get the FULL page content including header information
+      // Include both head and body for better company name detection
+      const headContent = document.head ? document.head.innerHTML : '';
+      const bodyContent = document.body ? document.body.outerHTML : '';
+      
+      // Create a comprehensive page content with header info
+      const fullPageContent = `
+        <head>${headContent}</head>
+        <body>${bodyContent}</body>
+      `;
+      
+      const jobContent = cleanHtmlContent(fullPageContent);
+      console.log(`📄 Using full page content (head + body): ${jobContent.length} characters`);
 
-  // Restore badge visibility if it was visible before
-  if (badge && !badgeWasHidden) {
-    badge.style.display = 'block';
-  }
+      // Restore badge visibility if it was visible before and it's a job site
+      if (badge && !badgeWasHidden && detectJobSite()) {
+        badge.style.display = 'block';
+      }
 
-  return content;
+      resolve(jobContent);
+    }, 2500); // Wait 1 second for dynamic content to load
+  });
 }
 
 // Initial styles
@@ -4265,7 +5149,7 @@ window.addEventListener('keydown', (e) => {
       if (!existing) {
         existing = createBadge();
       }
-      if (existing) {
+      if (existing && detectJobSite()) {
         existing.style.display = 'block';
         updateBadge();
       }
